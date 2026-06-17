@@ -1,0 +1,26 @@
+# Build outputs
+build/
+*.elf
+*.bin
+*.hex
+*.map
+*.o
+*.a
+
+# Python
+.venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+
+# Logs and generated telemetry
+logs/*.csv
+logs/*.txt
+
+# macOS
+.DS_Store
+
+# VS Code local state
+.vscode/*
+!.vscode/settings.json
+!.vscode/extensions.json

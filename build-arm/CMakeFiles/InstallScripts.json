@@ -1,0 +1,7 @@
+{
+	"InstallScripts" : 
+	[
+		"/Users/ayushibaidya/RTOS-Based Motion Control Firmware/build-arm/cmake_install.cmake"
+	],
+	"Parallel" : false
+}
