@@ -2,7 +2,7 @@
 
 ## Overview
 
-This project implements software-first embedded motion-control firmware for a simulated 2-axis stage, with a planned path toward ARM Cortex-M, FreeRTOS, and QEMU integration.
+This project implements software-first embedded motion-control firmware for a simulated 2-axis stage, with a planned path toward ARM Cortex-M, real FreeRTOS scheduling, and QEMU integration.
 
 The goal is to learn and demonstrate embedded systems concepts without requiring physical hardware.
 
@@ -16,12 +16,15 @@ This project currently demonstrates:
 - State-machine control
 - Telemetry formatting
 - Fault handling and recovery
+- Travel bounds checking
+- FreeRTOS-style queues, mutexes, and event groups through a host-side RTOS wrapper
+- Task-style application architecture for command, motion, telemetry, and fault behavior
 - Unit-tested firmware modules
 
 Planned future integrations include:
 
 - ARM Cortex-M firmware builds
-- FreeRTOS task scheduling
+- Real FreeRTOS task scheduling
 - UART command protocols
 - QEMU-based embedded simulation
 - Python-based firmware testing
@@ -29,7 +32,7 @@ Planned future integrations include:
 
 ## System Concept
 
-The current MVP runs as a host-side C demo. The planned target flow is a Python host program sending commands to firmware running inside QEMU, where the firmware behaves like it is running on a real microcontroller.
+The current project runs as a host-side C demo and includes a host-testable FreeRTOS-style task layer. The planned target flow is a Python host program sending commands to firmware running inside QEMU, where the firmware behaves like it is running on a real microcontroller.
 
 Example command:
 
@@ -53,7 +56,28 @@ Current MVP behavior is available through a host-side demo executable:
 ./build/mr_robo_demo
 ```
 
-The demo boots Mr. Robo, parses commands, simulates movement, triggers `ESTOP`, clears the fault with `CLEAR_FAULT`, and prints telemetry.
+The demo boots Mr. Robo, parses commands, simulates movement, enforces travel bounds, triggers `ESTOP`, clears the fault with `CLEAR_FAULT`, and prints telemetry.
+
+## Current Architecture
+
+```text
+Host Demo / CTest / Python Smoke Test
+        |
+        v
+Command Parser
+        |
+        v
+FreeRTOS-style Task Layer
+        |
+        +--> Command queue
+        +--> State mutex
+        +--> Event flags
+        |
+        v
+Motion Controller + Fault Manager + Telemetry
+```
+
+The current RTOS layer is a host-side simulation of FreeRTOS concepts. It does not run a real scheduler yet.
 
 ## Planned Architecture
 
@@ -64,7 +88,7 @@ Python CLI / Tests
 UART Command Interface
         |
         v
-FreeRTOS Firmware in QEMU
+Real FreeRTOS Firmware in QEMU or on ARM Cortex-M
         |
         v
 Motion Planner + PID + Fault Handling
@@ -86,8 +110,9 @@ Python Plant Simulator
   - `CLEAR_FAULT`
 - Simulate 2-axis position movement.
 - Generate periodic telemetry.
-- Simulate emergency-stop fault behavior and explicit fault recovery.
-- Add C unit tests for telemetry, command parsing, motion behavior, and fault handling.
+- Simulate emergency-stop behavior, travel bounds faults, and explicit fault recovery.
+- Add C unit tests for telemetry, command parsing, motion behavior, fault handling, RTOS wrappers, and task-level command flow.
+- Add a Python host-demo smoke test.
 
 ## Stretch Features
 
@@ -105,26 +130,37 @@ docs/       Requirements, design docs, verification plans
 firmware/   Embedded C/C++ firmware modules
 sim/        Python plant/motion simulator
 tools/      Python CLI and telemetry tools
-tests/      Unit and future QEMU integration tests
+tests/      C unit tests and Python host-demo integration tests
 logs/       Captured telemetry logs
 media/      Demo images, GIFs, or videos
 ```
 
 ## Current Status
 
-Current phase: Implementation MVP.
+Current phase: Implementation Phase 2 - FreeRTOS-style task architecture.
 
 Completed so far:
 
 - Requirements and design documentation.
 - Modular C implementations for telemetry, command parsing, motion control, and fault handling.
+- Travel bounds checking for the simulated 2-axis workspace.
 - Host-side `mr_robo_demo` executable.
-- CMake/CTest unit tests for telemetry, command parser, motion controller, and fault manager.
+- Host-side RTOS wrapper for queues, mutexes, and event groups.
+- Task-style application layer with command, motion, telemetry, and fault-handling steps.
+- CMake/CTest unit tests for telemetry, command parser, motion controller, fault manager, RTOS port, and app tasks.
+- Python host-demo integration smoke test.
+
+Next implementation steps:
+
+- Refactor `firmware/Core/main.c` to use the task layer instead of its older direct orchestration path.
+- Add GitHub Actions CI to build with CMake, run CTest, and run the Python smoke test.
+- Integrate a real FreeRTOS scheduler/backend after the host task layer is stable.
 
 Current validation status:
 
 ```text
-4/4 unit tests passing
+6/6 CTest suites passing
+Python host-demo smoke test passing
 ```
 
 ## Learning Goals
@@ -133,6 +169,6 @@ By completing this project, I will understand how RTOS-based firmware is structu
 
 ## Resume Keywords
 
-`C`, `CMake`, `CTest`, `ARM GCC`, `embedded systems`, `motion control`, `state machines`, `fault handling`, `telemetry`, `firmware testing`
+`C`, `CMake`, `CTest`, `ARM GCC`, `embedded systems`, `motion control`, `state machines`, `fault handling`, `telemetry`, `firmware testing`, `RTOS-style queues`, `mutexes`, `event groups`, `task architecture`
 
-Planned keywords after future integration: `FreeRTOS`, `QEMU`, `UART`, `Python`, `ARM Cortex-M`
+Planned keywords after future integration: `FreeRTOS scheduler`, `QEMU`, `UART`, `Python`, `ARM Cortex-M`, `CI/CD`

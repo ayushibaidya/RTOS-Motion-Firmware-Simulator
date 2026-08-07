@@ -270,3 +270,18 @@ const char *motion_controller_state_to_string(motion_state_t state)
         return "UNKNOWN";
     }
 }
+
+/* REQ-007: Bounds are checked separately from starting motion so callers can
+ * decide whether an out-of-range target should become a latched fault.
+ */
+bool motion_controller_is_target_in_bounds(
+    int32_t target_x_milli_mm,
+    int32_t target_y_milli_mm
+)
+{
+    return
+        target_x_milli_mm >= MOTION_MIN_X_MILLI_MM &&
+        target_x_milli_mm <= MOTION_MAX_X_MILLI_MM &&
+        target_y_milli_mm >= MOTION_MIN_Y_MILLI_MM &&
+        target_y_milli_mm <= MOTION_MAX_Y_MILLI_MM;
+}

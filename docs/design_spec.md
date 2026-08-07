@@ -2,9 +2,9 @@
 
 ## System Overview
 
-This project implements software-first motion-control firmware for a simulated 2-axis stage. The current MVP runs as a host-side C demo executable so the core firmware modules can be built and tested before ARM, FreeRTOS, and QEMU integration.
+This project implements software-first motion-control firmware for a simulated 2-axis stage. The current project runs as a host-side C demo executable and now includes a FreeRTOS-style task layer so the core firmware behavior can be tested before ARM, real FreeRTOS, and QEMU integration.
 
-The current demo sends text commands into the command parser, updates simulated 2-axis motion state, reports telemetry, and handles stop/fault behavior. Future phases will move the same module boundaries into an emulated ARM Cortex-M + FreeRTOS environment with Python host tools.
+The current demo sends text commands into the command parser, updates simulated 2-axis motion state, reports telemetry, and handles stop/fault behavior. The current task layer exposes the same behavior through host-callable task-step functions that model `CommandTask`, `MotionTask`, `TelemetryTask`, and a fault-handling path. Future phases will connect those boundaries to an emulated ARM Cortex-M + real FreeRTOS environment with Python host tools.
 
 The system is software-only but is designed to resemble a real embedded motion-control system.
 
@@ -17,16 +17,16 @@ Host C Demo / Tests
 Command Parser
         |
         v
-Application Orchestration
+Application Orchestration / Task Layer
         |
         +--> Motion Controller
         +--> Fault Manager
         +--> Telemetry
 ```
 
-## Current MVP Module Design
+## Current Module Design
 
-The current MVP uses plain C modules instead of RTOS tasks. This keeps the core logic testable before scheduler behavior is introduced.
+The project keeps the core logic in plain C modules and wraps those modules with host-callable task-step functions. This keeps the firmware testable before real scheduler behavior is introduced.
 
 ### Command Parser
 
@@ -38,6 +38,7 @@ Responsibilities:
 - Validate command arguments.
 - Convert position/feedrate values into integer milli-units.
 - Return stable parse error codes for invalid input.
+- Leave workspace safety policy to application orchestration and motion bounds checks.
 
 ### Motion Controller
 
@@ -48,6 +49,7 @@ Responsibilities:
 - Accept movement requests from application orchestration.
 - Track current and target `X`/`Y` positions.
 - Update simulated position over time.
+- Expose simulated travel bounds for target validation.
 - Support stopped, moving, done, and fault states.
 - Stop motion when requested by `STOP` or `ESTOP`.
 
@@ -72,86 +74,93 @@ Responsibilities:
 - Process `ESTOP`.
 - Track fault flags and fault reasons.
 - Allow explicit fault recovery through `CLEAR_FAULT`.
+- Track travel bounds violations as `LIMIT_EXCEEDED`.
 - Support future limit-switch and bounds-checking faults.
 
-## Future FreeRTOS Task Design
+## Current FreeRTOS-Style Task Design
 
-Future firmware shall use multiple FreeRTOS tasks to separate responsibilities.
+The current task layer uses one-step functions to model FreeRTOS tasks without starting a real scheduler. This allows CTest to verify task communication and fault behavior on the host.
 
 ### Command Task
 
-The Command Task receives text commands from the host interface.
+The Command Task step receives one text command from the host interface.
 
 Responsibilities:
 
-- Read incoming UART-style command data.
+- Accept incoming command text.
 - Parse commands such as `PING`, `STATUS`, `MOVE`, `STOP`, `ESTOP`, and `CLEAR_FAULT`.
 - Validate command arguments.
-- Send valid motion commands to the Motion Task.
-- Send invalid commands to the telemetry/response path as errors.
+- Send valid commands into the command queue.
+- Send invalid command parse errors to the telemetry/response path.
 
 ### Motion Task
 
-The Motion Task owns the current motion command and simulated position state.
+The Motion Task step consumes at most one queued command and advances simulated position by a caller-provided tick duration.
 
 Responsibilities:
 
-- Accept movement requests from the Command Task.
+- Accept command messages from the command queue.
 - Track current and target `X`/`Y` positions.
 - Update simulated position over time.
 - Support stopped, moving, done, and fault states.
 - Stop motion when requested by `STOP` or `ESTOP`.
-
-### Sensor/State Task
-
-The Sensor/State Task represents simulated feedback from sensors.
-
-Responsibilities:
-
-- Maintain simulated sensor values.
-- Provide position feedback for telemetry and future PID logic.
-- Optionally simulate limit-switch state.
-- Optionally inject sensor noise or faults in stretch phases.
+- Set or clear task event bits such as `MOVING`, `FAULTED`, and `STOP_REQUESTED`.
 
 ### Telemetry Task
 
-The Telemetry Task periodically sends system status to the host.
+The Telemetry Task step periodically sends system status to the host.
 
 Responsibilities:
 
+- Read the current motion and fault snapshot through the task context.
 - Report current firmware state.
 - Report simulated `X` and `Y` positions.
 - Report fault status.
 - Report uptime or tick count.
-- Send command responses such as `OK` and `ERR`.
 
-### Fault Task
+### Fault Handling Path
 
-The Fault Task handles unsafe or stopped states.
+Fault handling currently runs inside the task orchestration path rather than a separate `FaultTask`.
 
 Responsibilities:
 
 - Process `ESTOP`.
-- Track fault flags.
+- Track fault flags through the fault manager and event group.
 - Prevent new movement while in fault state.
-- Process explicit fault recovery.
-- Support future limit-switch and bounds-checking faults.
+- Process explicit fault recovery with `CLEAR_FAULT`.
+- Support travel bounds faults with `LIMIT_EXCEEDED`.
+
+### Future Sensor/Fault Tasks
+
+Future firmware may split simulated sensor feedback and fault processing into dedicated tasks after real scheduler integration.
+
+Possible responsibilities:
+
+- Maintain simulated sensor values.
+- Simulate limit-switch state.
+- Inject sensor noise or faults.
+- Escalate safety events through a fault queue or event group.
 
 ## Inter-Task Communication
 
-FreeRTOS queues shall be used to pass messages between tasks in a future RTOS integration phase.
+The current host-side RTOS wrapper provides bounded queues, mutexes, and event groups. These wrappers are intentionally shaped like FreeRTOS primitives but do not run a real scheduler yet.
 
-Planned queues:
+Current communication:
 
 ```text
-command_queue      Command Task -> Motion Task
+command_queue      CommandTask step -> MotionTask step
+state_mutex        Protects motion/fault snapshots in task-step tests
+event_group        Tracks MOVING, FAULTED, and STOP_REQUESTED flags
+```
+
+Planned future communication:
+
+```text
 telemetry_queue    Command/Motion/Fault Tasks -> Telemetry Task
 fault_queue        Command/Sensor Tasks -> Fault Task
 ```
 
-The Motion Task should own motion state to avoid multiple tasks modifying position directly.
-
-Shared state should be minimized. If shared state is needed, it should be protected using a mutex or copied through a queue.
+The task layer currently protects orchestration-level access with a mutex while the existing motion and fault modules continue to own their internal state.
 
 ## Command Protocol
 
@@ -191,6 +200,7 @@ OK FAULT CLEARED
 ERR_UNKNOWN_COMMAND
 ERR_INVALID_ARGUMENT
 ERR FAULT_ACTIVE
+ERR LIMIT_EXCEEDED
 ```
 
 ## Motion Model
@@ -221,6 +231,17 @@ FAULT
 For the MVP, the motion model may use a simple constant-rate update.
 
 Future versions may replace this with a trapezoidal acceleration profile.
+
+### Travel Bounds
+
+The MVP defines a simulated 2-axis workspace:
+
+```text
+X: 0 mm to 100 mm
+Y: 0 mm to 100 mm
+```
+
+Targets outside this workspace are rejected before motion starts. The application orchestration layer sets `FAULT_REASON_LIMIT_EXCEEDED`, moves the motion controller into `FAULT`, and reports `ERR LIMIT_EXCEEDED`.
 
 ## Telemetry Format
 
@@ -260,10 +281,16 @@ When `CLEAR_FAULT` is received:
 - Motion state is allowed to return to `IDLE`.
 - New movement commands may be accepted again.
 
+When a `MOVE` target exceeds the configured travel bounds:
+
+- Current motion is not started.
+- Fault reason is set to `LIMIT_EXCEEDED`.
+- Motion state changes to `FAULT`.
+- The host receives `ERR LIMIT_EXCEEDED`.
+
 In stretch phases, additional fault sources may include:
 
 - Simulated limit-switch trigger
-- Invalid target position
 - Command timeout
 - Sensor mismatch
 - Position error above threshold
@@ -326,16 +353,21 @@ Current unit test areas:
 
 - Command parser
 - Motion state update logic
+- Travel bounds checks
 - Fault state transitions
 - Telemetry formatting
+- RTOS queue, mutex, and event group behavior
+- Task-layer command queueing, motion updates, telemetry snapshots, and fault recovery
 
 Future unit test areas:
 
 - PID controller
-- Motion bounds checking
 - Fault injection behavior
+- Real FreeRTOS backend adapter behavior
 
 ### Integration Tests
+
+The current Python host-demo smoke test runs the host demo executable and checks expected boot, command, telemetry, fault, and recovery output.
 
 Future integration tests shall run the firmware in an emulator and communicate with it from Python.
 

@@ -16,6 +16,7 @@ The project currently emphasizes learning, correctness, modularity, and testabil
 - `docs/requirements.md`: functional requirements and MVP definition of done.
 - `docs/design_spec.md`: firmware task design, command protocol, motion model, telemetry, and fault handling.
 - `docs/architecture.md`: high-level component structure and data flow.
+- `docs/freertos_task_architecture.md`: FreeRTOS-style task boundaries, wrapper layer, task-layer design, and next integration steps.
 - `docs/verification_plan.md`: requirement-to-test verification strategy.
 - `docs/test_procedure.md`: manual and automated test procedures.
 
@@ -23,7 +24,7 @@ Before implementing a feature, read the relevant requirement and design sections
 
 ## Current SDLC Phase
 
-Current phase: Implementation MVP.
+Current phase: Implementation Phase 2 - FreeRTOS-style task architecture.
 
 Completed:
 
@@ -33,18 +34,25 @@ Completed:
 - Telemetry module
 - Motion controller module
 - Fault manager module
-- Initial unit tests for telemetry and motion
+- Command parser module
+- Host-side demo loop
+- C unit tests for telemetry, motion, command parsing, and fault handling
+- Host-side RTOS wrapper for queues, mutexes, and event groups
+- Task-style application layer for command, motion, telemetry, and fault flow
+- C unit tests for RTOS wrapper and task layer
+- Python host-demo smoke test
 
 In progress:
 
-- Command parser module
+- Refactor `firmware/Core/main.c` to use `firmware/App/tasks/app_tasks.c`
+- Documentation updates for the FreeRTOS-style phase
+- GitHub Actions CI/CD setup
 
 Planned next:
 
-- Wire command parser into `main.c`
-- Add unit tests for command parsing
-- Build a runnable MVP loop
-- Add QEMU and FreeRTOS after the plain C modules are stable
+- Replace duplicate orchestration in `main.c` with task-layer calls
+- Add CI to build, run CTest, and run the Python smoke test
+- Add QEMU and real FreeRTOS after the host task layer is stable
 
 ## Implementation Principles
 
@@ -53,7 +61,7 @@ Planned next:
 - Preserve embedded-style constraints: bounded buffers, integer math, fixed-width types, and explicit error handling.
 - Avoid heap allocation unless a later design document explicitly allows it.
 - Avoid floating-point math in firmware modules unless justified by a requirement.
-- Do not introduce FreeRTOS until core modules can be built and tested as plain C.
+- Keep the current FreeRTOS-style wrapper host-testable until the real FreeRTOS backend is intentionally added.
 - Do not claim physical hardware behavior; this project is currently simulation-only.
 
 ## Commenting Standard
@@ -197,6 +205,53 @@ Current status: placeholder.
 
 Do not implement PID until the MVP command parser and runnable main loop are stable.
 
+### `firmware/App/rtos/`
+
+Purpose: provide host-side RTOS-style primitives before real FreeRTOS is linked.
+
+Owns:
+
+- bounded queue behavior
+- mutex lock/unlock behavior
+- event bit set/clear/get behavior
+
+Must not:
+
+- start a real scheduler
+- allocate heap memory
+- own motion, fault, or telemetry policy
+
+Primary files:
+
+- `firmware/App/rtos/rtos_port.h`
+- `firmware/App/rtos/rtos_port_host.c`
+
+### `firmware/App/tasks/`
+
+Purpose: provide task-style application orchestration.
+
+Owns:
+
+- command queue storage
+- task context initialization
+- command-task step
+- motion-task step
+- telemetry-task step
+- event bits for `MOVING`, `FAULTED`, and `STOP_REQUESTED`
+
+Must not:
+
+- duplicate parser internals
+- duplicate motion math
+- duplicate telemetry formatting
+- claim to be running a real FreeRTOS scheduler
+
+Primary files:
+
+- `firmware/App/tasks/app_messages.h`
+- `firmware/App/tasks/app_tasks.h`
+- `firmware/App/tasks/app_tasks.c`
+
 ### `firmware/Core/`
 
 Purpose: firmware entry point and system orchestration.
@@ -206,12 +261,14 @@ Owns:
 - module initialization
 - top-level control loop for the non-FreeRTOS MVP
 - later FreeRTOS task creation and scheduler startup
+- next refactor should call the task layer instead of duplicating command orchestration
 
 Must not:
 
 - contain detailed command parsing internals
 - contain detailed motion math
 - contain PID internals
+- continue growing separate command/motion/fault orchestration once `app_tasks` owns that policy
 
 Primary file:
 
@@ -245,7 +302,8 @@ Do not fix unrelated tests or unrelated modules during focused implementation.
 - Host-side unit tests build with the Mac compiler.
 - ARM-oriented compile checks use `arm-none-eabi-gcc`.
 - `cmake/arm-none-eabi.cmake` configures CMake for ARM builds.
-- QEMU and FreeRTOS integration are planned, not yet active.
+- The FreeRTOS-style host wrapper and task layer are active.
+- Real FreeRTOS scheduler integration and QEMU execution are planned, not yet active.
 
 ## Agent Behavior Rules
 

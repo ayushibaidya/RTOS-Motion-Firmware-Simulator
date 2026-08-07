@@ -2,7 +2,7 @@
 
 ## Purpose
 
-This document lists the basic tests used to check the firmware during development. The current MVP is tested as a host-side C demo plus CMake/CTest unit tests. Emulator and Python-based tests are planned for later phases.
+This document lists the basic tests used to check the firmware during development. The current project is tested with CMake/CTest unit tests plus a Python host-demo integration smoke test. Emulator-based tests are planned for later phases.
 
 ## Manual Tests
 
@@ -87,7 +87,17 @@ CLEAR_FAULT
 
 Expected result: firmware clears fault state and returns motion state to `IDLE`.
 
-### Test 8: Invalid Command
+### Test 8: Travel Bounds Fault
+
+1. Send a movement outside the simulated workspace:
+
+```text
+MOVE X=101 Y=20 F=25
+```
+
+Expected result: firmware rejects the move, reports `ERR LIMIT_EXCEEDED`, and enters `FAULT` state.
+
+### Test 9: Invalid Command
 
 1. Send:
 
@@ -113,12 +123,38 @@ Current CTest suites:
 - `motion_controller`
 - `command_parser`
 - `fault_manager`
+- `rtos_port`
+- `app_tasks`
+
+The `motion_controller` suite includes travel bounds checks for valid minimum/maximum targets and invalid out-of-range targets.
+
+The `rtos_port` suite verifies host-side queue, mutex, and event-group behavior.
+
+The `app_tasks` suite verifies task-layer command queueing, movement, stop behavior, emergency-stop faulting, fault clearing, bounds faults, and telemetry snapshots.
 
 Expected result:
 
 ```text
-4/4 tests passed
+6/6 tests passed
 ```
+
+Run the current host-demo integration test with:
+
+```bash
+python3 tests/hil/test_host_demo.py
+```
+
+Current integration test:
+
+- `tests/hil/test_host_demo.py`
+
+Expected result:
+
+```text
+host demo integration test passed
+```
+
+The host-demo integration test verifies that the built demo executable prints expected boot, command, telemetry, fault, and recovery output.
 
 Future Python/emulator tests should cover:
 
@@ -127,3 +163,14 @@ Future Python/emulator tests should cover:
 - Telemetry logging
 - Fault injection
 - QEMU firmware boot
+
+## Current Regression Command Set
+
+Run both automated validation paths before large refactors:
+
+```bash
+cmake -S . -B build -G Ninja
+cmake --build build
+ctest --test-dir build --output-on-failure
+python3 tests/hil/test_host_demo.py
+```

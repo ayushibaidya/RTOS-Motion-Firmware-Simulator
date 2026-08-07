@@ -116,6 +116,30 @@ static int test_invalid_feedrate_is_rejected(void)
     return 0;
 }
 
+static int test_target_bounds_checking(void)
+{
+    /* REQ-007: The stage travel envelope is tested at its edges so future
+     * refactors cannot accidentally reject valid boundary points or allow
+     * unsafe targets outside the simulated workspace.
+     */
+    REQUIRE_TRUE(motion_controller_is_target_in_bounds(0, 0), "minimum bounds should be valid");
+    REQUIRE_TRUE(
+        motion_controller_is_target_in_bounds(MOTION_MAX_X_MILLI_MM, MOTION_MAX_Y_MILLI_MM),
+        "maximum bounds should be valid"
+    );
+    REQUIRE_TRUE(!motion_controller_is_target_in_bounds(-1, 0), "negative X should be invalid");
+    REQUIRE_TRUE(!motion_controller_is_target_in_bounds(0, -1), "negative Y should be invalid");
+    REQUIRE_TRUE(
+        !motion_controller_is_target_in_bounds(MOTION_MAX_X_MILLI_MM + 1, 0),
+        "X above maximum should be invalid"
+    );
+    REQUIRE_TRUE(
+        !motion_controller_is_target_in_bounds(0, MOTION_MAX_Y_MILLI_MM + 1),
+        "Y above maximum should be invalid"
+    );
+    return 0;
+}
+
 static int test_state_to_string(void)
 {
     REQUIRE_TRUE(
@@ -142,6 +166,7 @@ int main(void)
     failures += test_stop_holds_current_position();
     failures += test_fault_blocks_new_moves_until_cleared();
     failures += test_invalid_feedrate_is_rejected();
+    failures += test_target_bounds_checking();
     failures += test_state_to_string();
 
     if (failures == 0) {

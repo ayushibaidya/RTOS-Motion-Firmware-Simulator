@@ -89,4 +89,32 @@ if(NOT CMAKE_CROSSCOMPILING)
         ${APP_DIR}/fault
     )
     add_test(NAME fault_manager COMMAND test_fault_manager)
+
+    add_executable(test_rtos_port
+        tests/unit/test_rtos_port.c
+        ${APP_DIR}/rtos/rtos_port_host.c
+    )
+    target_include_directories(test_rtos_port PRIVATE
+        ${APP_DIR}/rtos
+    )
+    add_test(NAME rtos_port COMMAND test_rtos_port)
+
+    add_executable(test_app_tasks
+        tests/unit/test_app_tasks.c
+        ${APP_DIR}/tasks/app_tasks.c
+        ${APP_DIR}/rtos/rtos_port_host.c
+        ${APP_DIR}/command/command_parser.c
+        ${APP_DIR}/fault/fault_manager.c
+        ${APP_DIR}/motion/motion_controller.c
+        ${APP_DIR}/telemetry/telemetry.c
+    )
+    target_include_directories(test_app_tasks PRIVATE
+        ${APP_DIR}/tasks
+        ${APP_DIR}/rtos
+        ${APP_DIR}/command
+        ${APP_DIR}/fault
+        ${APP_DIR}/motion
+        ${APP_DIR}/telemetry
+    )
+    add_test(NAME app_tasks COMMAND test_app_tasks)
 endif()

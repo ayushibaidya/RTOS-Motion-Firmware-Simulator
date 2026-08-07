@@ -4,6 +4,14 @@
 #include <stdbool.h>
 #include <stdint.h>
 
+/* REQ-007: Simulated travel bounds provide a software safety envelope before
+ * future hardware limit switches or sensor feedback are introduced.
+ */
+#define MOTION_MIN_X_MILLI_MM 0
+#define MOTION_MAX_X_MILLI_MM 100000
+#define MOTION_MIN_Y_MILLI_MM 0
+#define MOTION_MAX_Y_MILLI_MM 100000
+
 /* The high-level condition of the simulated motion system. */
 typedef enum {
     MOTION_STATE_IDLE = 0,
@@ -52,5 +60,10 @@ void motion_controller_get_status(motion_status_t *status);
 
 /* Converts a motion state value into readable text for telemetry. */
 const char *motion_controller_state_to_string(motion_state_t state);
+
+/* REQ-007: Exposes the motion module's travel envelope so the application
+ * layer can reject unsafe move commands before starting motion.
+ */
+bool motion_controller_is_target_in_bounds(int32_t target_x_milli_mm, int32_t target_y_milli_mm);
 
 #endif

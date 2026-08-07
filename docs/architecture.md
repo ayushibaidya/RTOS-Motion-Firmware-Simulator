@@ -2,47 +2,62 @@
 
 ## System Summary
 
-This project has two main parts:
+This project currently has three main parts:
 
-- Firmware running on an emulated ARM Cortex-M target.
-- Python host tools that send commands, run tests, and collect telemetry.
+- Host-side C firmware modules that simulate a 2-axis motion stage.
+- A FreeRTOS-style task layer that models task communication without a real scheduler.
+- Python host tests that run the demo executable and check expected output.
 
-The firmware is designed like a real embedded motion controller, even though the hardware is simulated.
+The firmware is designed like a real embedded motion controller, even though the hardware is simulated and no physical device is required.
 
 ## High-Level Flow
 
 ```text
-Python CLI / Tests
+Host Demo / Tests
         |
         v
-UART-style commands
+Command Parser
         |
         v
-FreeRTOS firmware in emulator
+FreeRTOS-style Task Layer
         |
         v
 Motion state + telemetry + fault handling
 ```
 
-## Firmware Tasks
+## Current Task-Layer Components
 
 ```text
-Command Task    Parses host commands
-Motion Task     Updates simulated X/Y motion
-Sensor Task     Provides simulated feedback state
-Telemetry Task  Reports status to host
-Fault Task      Handles stop and emergency-stop behavior
+CommandTask step     Parses host commands and queues validated command messages
+MotionTask step      Consumes command messages and updates simulated X/Y motion
+TelemetryTask step   Reports status snapshots to host output
+Fault path           Handles ESTOP, bounds faults, and explicit recovery
 ```
 
-## Planned Data Flow
+These are implemented as host-callable step functions in `firmware/App/tasks/`. They are not real FreeRTOS tasks yet.
+
+## Current Data Flow
 
 ```text
-Command Task -> command_queue -> Motion Task
-Motion Task  -> telemetry_queue -> Telemetry Task
-Fault Task   -> telemetry_queue -> Telemetry Task
+Raw command text
+        |
+        v
+CommandTask step
+        |
+        v
+command_queue
+        |
+        v
+MotionTask step / fault path
+        |
+        v
+Motion + fault state
+        |
+        v
+TelemetryTask step
 ```
 
-The Motion Task owns the main motion state so that position updates are controlled in one place.
+The task layer uses a command queue, a state mutex, and event bits for `MOVING`, `FAULTED`, and `STOP_REQUESTED`.
 
 ## Main States
 
@@ -57,11 +72,12 @@ FAULT
 ## Host Tools
 
 ```text
-tools/mc_cli.py        Send commands
-tools/log_telemetry.py Log firmware telemetry
-sim/plant_sim.py       Future simulated hardware model
+tests/hil/test_host_demo.py  Runs the current host-demo smoke test
+tools/mc_cli.py              Future command sender
+tools/log_telemetry.py       Future telemetry logger
+sim/plant_sim.py             Future simulated hardware model
 ```
 
 ## Notes
 
-The first version will keep simulation simple. Later versions can add PID control, acceleration profiles, limit switches, and more detailed plant simulation.
+The current version keeps simulation simple. Later versions can add real FreeRTOS scheduling, QEMU execution, PID control, acceleration profiles, limit switches, and more detailed plant simulation.

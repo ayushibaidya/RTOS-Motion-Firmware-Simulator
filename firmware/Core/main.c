@@ -19,10 +19,18 @@ static const char MAIN_RESPONSE_FAULT_CLEARED[] = "OK FAULT CLEARED";
 static const char MAIN_ERROR_FAULT_ACTIVE[] = "ERR FAULT_ACTIVE";
 static const char MAIN_ERROR_MOVE_REJECTED[] = "ERR MOVE_REJECTED";
 static const char MAIN_ERROR_UNKNOWN_COMMAND[] = "ERR UNKNOWN_COMMAND";
-static const char MAIN_DEMO_COMMAND_PING[] = "PING";
-static const char MAIN_DEMO_COMMAND_MOVE[] = "MOVE X=50 Y=20 F=25";
-static const char MAIN_DEMO_COMMAND_ESTOP[] = "ESTOP";
-static const char MAIN_DEMO_COMMAND_CLEAR_FAULT[] = "CLEAR_FAULT";
+
+static const char *const MAIN_DEMO_SCRIPT[] = {
+    "PING",
+    "MOVE X=50 Y=20 F=25",
+    "ESTOP",
+    "CLEAR_FAULT",
+    "STATUS"
+};
+
+#define MAIN_DEMO_SCRIPT_LENGTH (sizeof(MAIN_DEMO_SCRIPT) / sizeof(MAIN_DEMO_SCRIPT[0]))
+
+static const char MAIN_ERROR_LIMIT_EXCEEDED[] = "ERR LIMIT_EXCEEDED";
 
 /* The MVP uses stdout as the telemetry sink so module integration can be
  * verified before UART/QEMU output is added.
@@ -80,6 +88,17 @@ static void main_handle_command(const char *line)
             break;
         }
 
+        /* REQ-007: Out-of-range targets are latched as faults at the
+         * orchestration layer so the parser stays syntax-only and the motion
+         * controller stays focused on motion state.
+         */
+        if (!motion_controller_is_target_in_bounds(command.x_milli_mm, command.y_milli_mm)) {
+            fault_manager_set_fault(FAULT_REASON_LIMIT_EXCEEDED);
+            motion_controller_set_fault();
+            telemetry_send_line(MAIN_ERROR_LIMIT_EXCEEDED);
+            break;
+        }
+
         if (motion_controller_start_move(
                 command.x_milli_mm,
                 command.y_milli_mm,
@@ -125,20 +144,23 @@ int main(void){
 
     telemetry_send_startup();
 
-    main_handle_command(MAIN_DEMO_COMMAND_PING);
-    main_handle_command(MAIN_DEMO_COMMAND_MOVE);
+    for (step = 0u; step < MAIN_DEMO_SCRIPT_LENGTH; step++) {
+        main_handle_command(MAIN_DEMO_SCRIPT[step]);
 
-    for (step = 0u; step < MAIN_SIMULATION_STEPS; step++) {
-        uptime_ms += MAIN_TICK_MS;
-        motion_controller_update(MAIN_TICK_MS);
-        main_send_motion_status(uptime_ms);
+        if (step == 1u) {
+            uint32_t simulation_step;
+
+            for (simulation_step = 0u; simulation_step < MAIN_SIMULATION_STEPS; simulation_step++) {
+                uptime_ms += MAIN_TICK_MS;
+                motion_controller_update(MAIN_TICK_MS);
+                main_send_motion_status(uptime_ms);
+            }
+        }
+
+        if (step == 2u || step == 3u) {
+            main_send_motion_status(uptime_ms);
+        }
     }
-
-    main_handle_command(MAIN_DEMO_COMMAND_ESTOP);
-    main_send_motion_status(uptime_ms);
-    main_handle_command(MAIN_DEMO_COMMAND_CLEAR_FAULT);
-    main_send_motion_status(uptime_ms);
-    main_handle_command("STATUS");
 
     return 0;
 }

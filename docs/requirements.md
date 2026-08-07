@@ -2,7 +2,7 @@
 
 ## Project Goal
 
-Build software-first embedded firmware for a simulated 2-axis motion stage. The current MVP shall run as a host-side C demo, while future phases shall target ARM Cortex-M emulation, FreeRTOS task scheduling, UART-style host communication, and QEMU-based validation.
+Build software-first embedded firmware for a simulated 2-axis motion stage. The current project shall run as a host-side C demo with a FreeRTOS-style task architecture, while future phases shall target ARM Cortex-M emulation, real FreeRTOS task scheduling, UART-style host communication, and QEMU-based validation.
 
 ## MVP Requirements
 
@@ -10,9 +10,9 @@ Build software-first embedded firmware for a simulated 2-axis motion stage. The 
 
 The MVP firmware shall build and run as a host-side C demo executable. Future integration shall target an emulated ARM Cortex-M environment.
 
-### REQ-002: RTOS Task Structure
+### REQ-002: RTOS-Style Task Structure
 
-The MVP firmware shall keep command handling, motion control, telemetry, and fault handling in separate C modules. Future integration shall map these modules into separate FreeRTOS tasks.
+The firmware shall keep command handling, motion control, telemetry, and fault handling in separate C modules. The current FreeRTOS-style phase shall map these responsibilities into host-callable task-step functions before real FreeRTOS scheduling is introduced.
 
 ### REQ-003: UART Command Interface
 
@@ -43,6 +43,8 @@ The firmware shall track simulated 2-axis position state for `X` and `Y`.
 
 The firmware shall update position over time when a valid `MOVE` command is received.
 
+The firmware shall reject movement targets outside the simulated travel area.
+
 ### REQ-006: Telemetry
 
 The firmware shall periodically report motion state, simulated position, and fault status.
@@ -71,6 +73,13 @@ When `CLEAR_FAULT` is received:
 - Fault reason shall return to `NONE`.
 - Motion state shall be allowed to return to `IDLE`.
 
+When a target exceeds the simulated travel bounds:
+
+- Fault state shall become active.
+- Fault reason shall become `LIMIT_EXCEEDED`.
+- Motion state shall enter `FAULT`.
+- The command response shall report `ERR LIMIT_EXCEEDED`.
+
 ### REQ-008: Host Demo
 
 The MVP shall provide a host-side executable that demonstrates boot, command parsing, simulated movement, telemetry, emergency stop, and fault clearing.
@@ -83,6 +92,28 @@ The MVP shall include CMake/CTest unit tests for:
 - command parsing
 - motion state updates
 - fault handling
+- RTOS wrapper queue, mutex, and event-group behavior
+- task-layer command flow, motion updates, telemetry snapshots, and fault recovery
+
+### REQ-010: RTOS Wrapper Layer
+
+The project shall provide a host-side RTOS abstraction layer that models:
+
+- bounded queues
+- mutex lock/unlock behavior
+- event bit set/clear/get behavior
+
+The wrapper shall avoid heap allocation and use caller-owned static storage.
+
+### REQ-011: Task-Layer Application Flow
+
+The project shall provide task-style application functions for:
+
+- parsing raw command text and queueing validated commands
+- consuming command messages and updating motion/fault state
+- publishing telemetry snapshots
+
+The task layer shall preserve existing safety behavior for `ESTOP`, `STOP`, `CLEAR_FAULT`, and out-of-bounds `MOVE` commands.
 
 ## Current MVP Definition of Done
 
@@ -95,21 +126,26 @@ The current MVP is complete when:
 - Telemetry reports uptime, state, position, and fault status.
 - `ESTOP` activates fault state.
 - `CLEAR_FAULT` clears fault state.
-- Unit tests pass for telemetry, command parser, motion controller, and fault manager.
+- Out-of-bounds moves activate `LIMIT_EXCEEDED` fault behavior.
+- Unit tests pass for telemetry, command parser, motion controller, fault manager, RTOS port, and app tasks.
+- The Python host-demo smoke test passes.
 
 ## Current Validation Status
 
 ```text
-4/4 unit tests passing
+6/6 CTest suites passing
+Python host-demo smoke test passing
 ```
 
 ## Future Requirements
 
 Future phases should add:
 
-- FreeRTOS task scheduling
+- Refactor `firmware/Core/main.c` to use the task layer
+- GitHub Actions CI/CD for build, CTest, and Python smoke testing
+- Real FreeRTOS task scheduling
 - QEMU-based ARM Cortex-M execution
 - UART-style host communication
 - Python CLI and telemetry logger
 - PID/control-loop logic
-- simulated travel bounds and limit-switch faults
+- simulated limit-switch faults
