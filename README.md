@@ -147,12 +147,12 @@ Completed so far:
 - Host-side `mr_robo_demo` executable.
 - Host-side RTOS wrapper for queues, mutexes, and event groups.
 - Task-style application layer with command, motion, telemetry, and fault-handling steps.
+- Host demo refactored to drive the task layer instead of duplicating command orchestration.
 - CMake/CTest unit tests for telemetry, command parser, motion controller, fault manager, RTOS port, and app tasks.
 - Python host-demo integration smoke test.
 
 Next implementation steps:
 
-- Refactor `firmware/Core/main.c` to use the task layer instead of its older direct orchestration path.
 - Add GitHub Actions CI to build with CMake, run CTest, and run the Python smoke test.
 - Integrate a real FreeRTOS scheduler/backend after the host task layer is stable.
 

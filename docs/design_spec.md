@@ -4,7 +4,7 @@
 
 This project implements software-first motion-control firmware for a simulated 2-axis stage. The current project runs as a host-side C demo executable and now includes a FreeRTOS-style task layer so the core firmware behavior can be tested before ARM, real FreeRTOS, and QEMU integration.
 
-The current demo sends text commands into the command parser, updates simulated 2-axis motion state, reports telemetry, and handles stop/fault behavior. The current task layer exposes the same behavior through host-callable task-step functions that model `CommandTask`, `MotionTask`, `TelemetryTask`, and a fault-handling path. Future phases will connect those boundaries to an emulated ARM Cortex-M + real FreeRTOS environment with Python host tools.
+The current demo drives host-callable task-step functions that model `CommandTask`, `MotionTask`, `TelemetryTask`, and a fault-handling path. Those task steps send text commands through the command parser, update simulated 2-axis motion state, report telemetry, and handle stop/fault behavior. Future phases will connect those boundaries to an emulated ARM Cortex-M + real FreeRTOS environment with Python host tools.
 
 The system is software-only but is designed to resemble a real embedded motion-control system.
 
@@ -14,10 +14,10 @@ The system is software-only but is designed to resemble a real embedded motion-c
 Host C Demo / Tests
         |
         v
-Command Parser
+FreeRTOS-style Task Layer
         |
-        v
-Application Orchestration / Task Layer
+        +--> Command Parser
+        +--> RTOS-style Queue/Mutex/Event Flags
         |
         +--> Motion Controller
         +--> Fault Manager

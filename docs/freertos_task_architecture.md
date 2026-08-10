@@ -152,11 +152,11 @@ These files define:
 
 This layer is covered by the `app_tasks` CTest suite.
 
-### Next Slice: Main Refactor
+### Completed Slice 3: Main Refactor
 
-The next implementation slice should refactor `firmware/Core/main.c` so the host demo uses `app_tasks` instead of duplicating command orchestration logic.
+`firmware/Core/main.c` now uses `app_tasks` instead of duplicating command orchestration logic.
 
-After that, add CI/CD and then start the real FreeRTOS backend/scheduler integration.
+The next slice is CI/CD. After CI is active, start the real FreeRTOS backend/scheduler integration.
 
 ## Testing Strategy
 
@@ -171,7 +171,7 @@ New tests should be added incrementally:
 - `ESTOP` fault transition through the task path
 - `CLEAR_FAULT` recovery through the task path
 - Motion update through the task path
-- Host-demo regression after `main.c` is refactored to use the task layer
+- Host-demo regression after `main.c` uses the task layer
 
 ## Known Limitations
 
@@ -182,7 +182,7 @@ New tests should be added incrementally:
 
 ## Next Decision
 
-The host-side wrapper path has been selected and implemented. The next decision is when to replace the host wrappers with a real FreeRTOS backend:
+The host-side wrapper path has been selected and implemented, and the host demo now uses the task layer. The next decision is when to replace the host wrappers with a real FreeRTOS backend:
 
-1. After `main.c` uses the task layer, and
-2. After CI confirms the host tests and smoke test stay green.
+1. After CI confirms the host tests and smoke test stay green, and
+2. After the real FreeRTOS backend target is selected.

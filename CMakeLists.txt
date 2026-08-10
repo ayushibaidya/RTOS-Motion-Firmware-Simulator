@@ -42,12 +42,16 @@ if(NOT CMAKE_CROSSCOMPILING)
 
     add_executable(mr_robo_demo
         ${CORE_DIR}/main.c
+        ${APP_DIR}/tasks/app_tasks.c
+        ${APP_DIR}/rtos/rtos_port_host.c
         ${APP_DIR}/command/command_parser.c
         ${APP_DIR}/fault/fault_manager.c
         ${APP_DIR}/motion/motion_controller.c
         ${APP_DIR}/telemetry/telemetry.c
     )
     target_include_directories(mr_robo_demo PRIVATE
+        ${APP_DIR}/tasks
+        ${APP_DIR}/rtos
         ${APP_DIR}/command
         ${APP_DIR}/fault
         ${APP_DIR}/motion

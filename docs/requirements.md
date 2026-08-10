@@ -141,7 +141,6 @@ Python host-demo smoke test passing
 
 Future phases should add:
 
-- Refactor `firmware/Core/main.c` to use the task layer
 - GitHub Actions CI/CD for build, CTest, and Python smoke testing
 - Real FreeRTOS task scheduling
 - QEMU-based ARM Cortex-M execution

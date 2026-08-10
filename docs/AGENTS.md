@@ -44,13 +44,10 @@ Completed:
 
 In progress:
 
-- Refactor `firmware/Core/main.c` to use `firmware/App/tasks/app_tasks.c`
-- Documentation updates for the FreeRTOS-style phase
 - GitHub Actions CI/CD setup
 
 Planned next:
 
-- Replace duplicate orchestration in `main.c` with task-layer calls
 - Add CI to build, run CTest, and run the Python smoke test
 - Add QEMU and real FreeRTOS after the host task layer is stable
 
@@ -259,16 +256,15 @@ Purpose: firmware entry point and system orchestration.
 Owns:
 
 - module initialization
-- top-level control loop for the non-FreeRTOS MVP
+- top-level demo loop that drives task-layer steps
 - later FreeRTOS task creation and scheduler startup
-- next refactor should call the task layer instead of duplicating command orchestration
 
 Must not:
 
 - contain detailed command parsing internals
 - contain detailed motion math
 - contain PID internals
-- continue growing separate command/motion/fault orchestration once `app_tasks` owns that policy
+- reintroduce separate command/motion/fault orchestration now that `app_tasks` owns that policy
 
 Primary file:
 
