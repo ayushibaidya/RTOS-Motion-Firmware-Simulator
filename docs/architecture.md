@@ -7,6 +7,7 @@ This project currently has three main parts:
 - Host-side C firmware modules that simulate a 2-axis motion stage.
 - A FreeRTOS-style task layer that models task communication without a real scheduler.
 - Python host tests that run the demo executable and check expected output.
+- GitHub Actions CI that repeats build and test validation after code is pushed.
 
 The firmware is designed like a real embedded motion controller, even though the hardware is simulated and no physical device is required.
 
@@ -59,6 +60,26 @@ TelemetryTask step
 
 The task layer uses a command queue, a state mutex, and event bits for `MOVING`, `FAULTED`, and `STOP_REQUESTED`.
 
+## Dependency Layout
+
+```text
+third_party/FreeRTOS-Kernel
+```
+
+The FreeRTOS kernel is present as a Git submodule for the upcoming real backend phase. The current default host build still uses `firmware/App/rtos/rtos_port_host.c`.
+
+The planned real backend file is:
+
+```text
+firmware/App/rtos/rtos_port_freertos.c
+```
+
+The CMake option for future backend selection is:
+
+```text
+USE_FREERTOS
+```
+
 ## Main States
 
 ```text
@@ -80,4 +101,4 @@ sim/plant_sim.py             Future simulated hardware model
 
 ## Notes
 
-The current version keeps simulation simple. Later versions can add real FreeRTOS scheduling, QEMU execution, PID control, acceleration profiles, limit switches, and more detailed plant simulation.
+The current version keeps simulation simple while preparing the dependency and build structure for real FreeRTOS. Later versions can add real scheduler startup, QEMU execution, PID control, acceleration profiles, limit switches, and more detailed plant simulation.

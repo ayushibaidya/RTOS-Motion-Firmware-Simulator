@@ -24,7 +24,7 @@ Before implementing a feature, read the relevant requirement and design sections
 
 ## Current SDLC Phase
 
-Current phase: Implementation Phase 2 - FreeRTOS-style task architecture.
+Current phase: Implementation Phase 3 - real FreeRTOS backend preparation.
 
 Completed:
 
@@ -41,15 +41,20 @@ Completed:
 - Task-style application layer for command, motion, telemetry, and fault flow
 - C unit tests for RTOS wrapper and task layer
 - Python host-demo smoke test
+- GitHub Actions CI workflow
+- FreeRTOS-Kernel Git submodule under `third_party/FreeRTOS-Kernel`
+- CMake `USE_FREERTOS` option for future backend selection
+- Placeholder real FreeRTOS backend file
 
 In progress:
 
-- GitHub Actions CI/CD setup
+- Real FreeRTOS backend planning and implementation
 
 Planned next:
 
-- Add CI to build, run CTest, and run the Python smoke test
-- Add QEMU and real FreeRTOS after the host task layer is stable
+- Map `rtos_port_freertos.c` to real FreeRTOS queue, semaphore, and event-group APIs
+- Wire `USE_FREERTOS=ON` after `FreeRTOSConfig.h` and a portable layer are selected
+- Add QEMU after the real backend can compile
 
 ## Implementation Principles
 
@@ -204,17 +209,19 @@ Do not implement PID until the MVP command parser and runnable main loop are sta
 
 ### `firmware/App/rtos/`
 
-Purpose: provide host-side RTOS-style primitives before real FreeRTOS is linked.
+Purpose: provide RTOS-style primitives behind a stable wrapper API.
 
 Owns:
 
 - bounded queue behavior
 - mutex lock/unlock behavior
 - event bit set/clear/get behavior
+- host backend implementation
+- future real FreeRTOS backend implementation
 
 Must not:
 
-- start a real scheduler
+- start a real scheduler from the wrapper layer
 - allocate heap memory
 - own motion, fault, or telemetry policy
 
@@ -222,6 +229,7 @@ Primary files:
 
 - `firmware/App/rtos/rtos_port.h`
 - `firmware/App/rtos/rtos_port_host.c`
+- `firmware/App/rtos/rtos_port_freertos.c`
 
 ### `firmware/App/tasks/`
 
@@ -298,6 +306,9 @@ Do not fix unrelated tests or unrelated modules during focused implementation.
 - Host-side unit tests build with the Mac compiler.
 - ARM-oriented compile checks use `arm-none-eabi-gcc`.
 - `cmake/arm-none-eabi.cmake` configures CMake for ARM builds.
+- `.github/workflows/ci.yml` runs CMake, CTest, and the Python host-demo smoke test on GitHub.
+- `third_party/FreeRTOS-Kernel` is tracked as a Git submodule.
+- `USE_FREERTOS` exists as a CMake option but the default host build still uses `rtos_port_host.c`.
 - The FreeRTOS-style host wrapper and task layer are active.
 - Real FreeRTOS scheduler integration and QEMU execution are planned, not yet active.
 

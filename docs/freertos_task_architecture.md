@@ -8,7 +8,7 @@ The goal is to move from a single host-side control loop toward a task-based emb
 
 ## Current Project Stage
 
-The current project is a host-side C simulator with a FreeRTOS-style task layer. It supports:
+The current project is a host-side C simulator with a FreeRTOS-style task layer, CI validation, and a real FreeRTOS kernel dependency prepared as a submodule. It supports:
 
 - Command parsing for `PING`, `STATUS`, `MOVE`, `STOP`, `ESTOP`, and `CLEAR_FAULT`
 - Simulated X/Y motion using milli-millimeter units
@@ -16,8 +16,10 @@ The current project is a host-side C simulator with a FreeRTOS-style task layer.
 - Telemetry output for timestamp, state, position, and fault status
 - Unit tests for core modules, RTOS wrappers, and task-layer flow
 - A Python host demo smoke test
+- GitHub Actions validation on push and pull request
+- FreeRTOS-Kernel tracked under `third_party/FreeRTOS-Kernel`
 
-The FreeRTOS-style task boundaries and communication primitives have been introduced on the host. The project does not run a real FreeRTOS scheduler yet.
+The FreeRTOS-style task boundaries and communication primitives have been introduced on the host. The real FreeRTOS dependency is present, but the project does not run a real FreeRTOS scheduler yet.
 
 ## Task Overview
 
@@ -156,7 +158,31 @@ This layer is covered by the `app_tasks` CTest suite.
 
 `firmware/Core/main.c` now uses `app_tasks` instead of duplicating command orchestration logic.
 
-The next slice is CI/CD. After CI is active, start the real FreeRTOS backend/scheduler integration.
+### Completed Slice 4: CI/CD
+
+GitHub Actions now builds the host project, runs CTest, and runs the Python host-demo smoke test on push and pull request.
+
+### Current Slice 5: Real FreeRTOS Backend Preparation
+
+FreeRTOS-Kernel is now tracked as a Git submodule:
+
+```text
+third_party/FreeRTOS-Kernel
+```
+
+The project has a CMake backend-selection option:
+
+```text
+USE_FREERTOS
+```
+
+The real backend placeholder is:
+
+```text
+firmware/App/rtos/rtos_port_freertos.c
+```
+
+The next implementation step is to map the wrapper APIs in `rtos_port.h` to real FreeRTOS queue, semaphore, and event-group APIs without breaking the default host backend.
 
 ## Testing Strategy
 
@@ -172,17 +198,23 @@ New tests should be added incrementally:
 - `CLEAR_FAULT` recovery through the task path
 - Motion update through the task path
 - Host-demo regression after `main.c` uses the task layer
+- CI regression on push and pull request
+- Future `USE_FREERTOS=ON` backend build test
 
 ## Known Limitations
 
 - This project does not yet run a real FreeRTOS scheduler.
+- `rtos_port_freertos.c` is currently a backend placeholder and is not the default host backend.
+- `USE_FREERTOS=ON` is not yet wired to a complete FreeRTOS target.
 - The current simulator does not interact with physical motors or sensors.
 - Timing is simulated using fixed tick values.
 - Hardware-specific validation is deferred until QEMU or physical hardware support is added.
 
 ## Next Decision
 
-The host-side wrapper path has been selected and implemented, and the host demo now uses the task layer. The next decision is when to replace the host wrappers with a real FreeRTOS backend:
+The host-side wrapper path has been selected and implemented, the host demo uses the task layer, CI is active, and the FreeRTOS dependency is available. The next decision is how to complete the real FreeRTOS backend:
 
-1. After CI confirms the host tests and smoke test stay green, and
-2. After the real FreeRTOS backend target is selected.
+1. Select the first real backend target or portable layer.
+2. Add the required `FreeRTOSConfig.h`.
+3. Wire `USE_FREERTOS=ON` to compile `rtos_port_freertos.c`.
+4. Keep `USE_FREERTOS=OFF` as the stable host-test path.

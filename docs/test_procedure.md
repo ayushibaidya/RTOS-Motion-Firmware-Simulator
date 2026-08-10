@@ -174,3 +174,22 @@ cmake --build build
 ctest --test-dir build --output-on-failure
 python3 tests/hil/test_host_demo.py
 ```
+
+## CI Validation
+
+GitHub Actions runs the same core validation on push and pull request:
+
+- checkout repository with submodules
+- install CMake, Ninja, and Python
+- configure the project with CMake
+- build the project
+- run CTest
+- run the Python host-demo smoke test
+
+Current workflow file:
+
+```text
+.github/workflows/ci.yml
+```
+
+Expected result: the GitHub Actions run completes with a green check.

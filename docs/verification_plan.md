@@ -12,6 +12,7 @@ The project will use a mix of:
 - CMake/CTest unit tests
 - Telemetry review
 - Python host-demo integration smoke testing
+- GitHub Actions CI validation
 - Future Python/emulator-based integration tests
 
 ## Requirement Checks
@@ -33,6 +34,9 @@ The project will use a mix of:
 | Task-layer flow behaves correctly | Run `app_tasks` CTest suite for command queueing, motion, telemetry, and fault recovery |
 | Unit tests pass | Run CTest and confirm `6/6` tests passing |
 | Host demo smoke test passes | Run `python3 tests/hil/test_host_demo.py` |
+| CI workflow passes | Push to GitHub and confirm the Actions run builds and tests successfully |
+| FreeRTOS dependency is tracked | Confirm `third_party/FreeRTOS-Kernel` is present as a Git submodule |
+| FreeRTOS backend remains gated | Confirm default host build uses `USE_FREERTOS=OFF` |
 
 ## MVP Pass Criteria
 
@@ -45,6 +49,8 @@ The MVP passes verification when:
 - Stop, emergency-stop, and fault-clear behavior work.
 - Automated tests pass for telemetry, command parsing, motion behavior, fault handling, RTOS wrapper behavior, and app task flow.
 - Python host-demo smoke testing passes.
+- GitHub Actions CI passes on push or pull request.
+- The FreeRTOS kernel dependency is present without breaking the default host build.
 
 ## Current Validation Command
 
@@ -72,11 +78,27 @@ Expected result:
 host demo integration test passed
 ```
 
+## CI Verification
+
+The CI workflow should verify:
+
+- repository checkout with submodules
+- CMake configure
+- CMake build
+- CTest unit suites
+- Python host-demo smoke test
+
+Workflow file:
+
+```text
+.github/workflows/ci.yml
+```
+
 ## Future Verification
 
 Future verification phases should add:
 
-- GitHub Actions CI checks for build, CTest, and Python smoke testing
+- `USE_FREERTOS=ON` backend build checks
 - QEMU firmware boot verification
 - Real FreeRTOS task scheduling checks
 - UART command-response tests

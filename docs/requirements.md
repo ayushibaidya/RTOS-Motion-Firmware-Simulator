@@ -2,7 +2,7 @@
 
 ## Project Goal
 
-Build software-first embedded firmware for a simulated 2-axis motion stage. The current project shall run as a host-side C demo with a FreeRTOS-style task architecture, while future phases shall target ARM Cortex-M emulation, real FreeRTOS task scheduling, UART-style host communication, and QEMU-based validation.
+Build software-first embedded firmware for a simulated 2-axis motion stage. The current project shall run as a host-side C demo with a FreeRTOS-style task architecture and CI validation, while the active integration phase prepares a real FreeRTOS backend for future ARM Cortex-M emulation, UART-style host communication, and QEMU-based validation.
 
 ## MVP Requirements
 
@@ -115,6 +115,24 @@ The project shall provide task-style application functions for:
 
 The task layer shall preserve existing safety behavior for `ESTOP`, `STOP`, `CLEAR_FAULT`, and out-of-bounds `MOVE` commands.
 
+### REQ-012: CI/CD Validation
+
+The project shall include a GitHub Actions workflow that:
+
+- checks out the repository with submodules
+- configures the project with CMake and Ninja
+- builds the host-side C targets
+- runs CTest unit suites
+- runs the Python host-demo smoke test
+
+### REQ-013: FreeRTOS Dependency Preparation
+
+The project shall track the real FreeRTOS kernel as a third-party Git submodule under `third_party/FreeRTOS-Kernel`.
+
+The default host build shall continue to use `rtos_port_host.c` until the real FreeRTOS backend is implemented and intentionally selected.
+
+The CMake build shall expose a `USE_FREERTOS` option for future backend selection.
+
 ## Current MVP Definition of Done
 
 The current MVP is complete when:
@@ -129,6 +147,7 @@ The current MVP is complete when:
 - Out-of-bounds moves activate `LIMIT_EXCEEDED` fault behavior.
 - Unit tests pass for telemetry, command parser, motion controller, fault manager, RTOS port, and app tasks.
 - The Python host-demo smoke test passes.
+- GitHub Actions CI runs the same build, CTest, and Python smoke validation on push and pull request.
 
 ## Current Validation Status
 
@@ -141,7 +160,8 @@ Python host-demo smoke test passing
 
 Future phases should add:
 
-- GitHub Actions CI/CD for build, CTest, and Python smoke testing
+- Implement the real FreeRTOS backend in `rtos_port_freertos.c`
+- Wire `USE_FREERTOS=ON` to the real backend once FreeRTOS configuration is available
 - Real FreeRTOS task scheduling
 - QEMU-based ARM Cortex-M execution
 - UART-style host communication

@@ -14,6 +14,8 @@ set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 
+option(USE_FREERTOS "Build with real FreeRTOS backend" OFF)
+
 # Main project directories.
 set(FIRMWARE_DIR ${CMAKE_CURRENT_SOURCE_DIR}/firmware)
 set(APP_DIR ${FIRMWARE_DIR}/App)
