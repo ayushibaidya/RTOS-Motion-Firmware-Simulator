@@ -2,7 +2,7 @@
 
 ## Overview
 
-This project implements software-first embedded motion-control firmware for a simulated 2-axis stage, with a planned path toward ARM Cortex-M, real FreeRTOS scheduling, and QEMU integration.
+This project implements software-first embedded motion-control firmware for a simulated 2-axis stage, with host-side validation and a real FreeRTOS POSIX scheduler demo. The long-term path is ARM Cortex-M, QEMU integration, and hardware-style driver boundaries.
 
 The goal is to learn and demonstrate embedded systems concepts without requiring physical hardware.
 
@@ -18,14 +18,14 @@ This project currently demonstrates:
 - Fault handling and recovery
 - Travel bounds checking
 - FreeRTOS-style queues, mutexes, and event groups through a host-side RTOS wrapper
+- Real FreeRTOS queue, mutex, event-group, and scheduler startup through `USE_FREERTOS=ON`
 - Task-style application architecture for command, motion, telemetry, and fault behavior
+- Static FreeRTOS task creation with command, motion, telemetry, and supervisor tasks
 - GitHub Actions CI for automated build, unit-test, and smoke-test validation
 - Unit-tested firmware modules
 
 Planned future integrations include:
 
-- Complete real FreeRTOS backend selection with `USE_FREERTOS=ON`
-- FreeRTOS task creation and scheduler startup
 - ARM Cortex-M firmware builds
 - UART command protocols
 - QEMU-based embedded simulation
@@ -34,7 +34,12 @@ Planned future integrations include:
 
 ## System Concept
 
-The current project runs as a host-side C demo and includes a host-testable FreeRTOS-style task layer. The planned target flow is a Python host program sending commands to firmware running inside QEMU, where the firmware behaves like it is running on a real microcontroller.
+The current project runs in two software-only modes:
+
+- a host-side C demo that steps through the task layer directly
+- a FreeRTOS POSIX scheduler demo that creates real FreeRTOS tasks and runs a scripted command flow
+
+The planned target flow is a Python host program sending commands to firmware running inside QEMU, where the firmware behaves like it is running on a real microcontroller.
 
 Example command:
 
@@ -60,10 +65,18 @@ Current MVP behavior is available through a host-side demo executable:
 
 The demo boots Mr. Robo, parses commands, simulates movement, enforces travel bounds, triggers `ESTOP`, clears the fault with `CLEAR_FAULT`, and prints telemetry.
 
+The scheduler-backed FreeRTOS demo is available when building with `USE_FREERTOS=ON`:
+
+```bash
+./build-freertos/motion_freertos_scheduler_demo
+```
+
+This demo uses real FreeRTOS task creation and scheduler startup through the POSIX simulator port while keeping the same parser, motion, fault, and telemetry modules.
+
 ## Current Architecture
 
 ```text
-Host Demo / CTest / Python Smoke Test
+Host Demo / CTest / Python Smoke Tests
         |
         v
 Command Parser
@@ -77,11 +90,12 @@ FreeRTOS-style Task Layer
         |
         v
 Motion Controller + Fault Manager + Telemetry
+        |
+        v
+Host RTOS Wrapper or Real FreeRTOS POSIX Backend
 ```
 
-The current RTOS layer is a host-side simulation of FreeRTOS concepts. It does not run a real scheduler yet.
-
-The real FreeRTOS kernel is now tracked as a third-party Git submodule under `third_party/FreeRTOS-Kernel`. The default build still uses the host RTOS wrapper until the real backend is implemented and selected.
+The default build uses the host RTOS wrapper so tests stay fast and hardware-free. The real FreeRTOS kernel is tracked as a third-party Git submodule under `third_party/FreeRTOS-Kernel`, and `USE_FREERTOS=ON` builds the wrapper API and scheduler demo against real FreeRTOS queue, mutex, event-group, task, and scheduler APIs through the POSIX simulator port.
 
 ## Planned Architecture
 
@@ -116,7 +130,8 @@ Python Plant Simulator
 - Generate periodic telemetry.
 - Simulate emergency-stop behavior, travel bounds faults, and explicit fault recovery.
 - Add C unit tests for telemetry, command parsing, motion behavior, fault handling, RTOS wrappers, and task-level command flow.
-- Add a Python host-demo smoke test.
+- Add Python smoke tests for the host demo and FreeRTOS scheduler demo.
+- Build a real FreeRTOS scheduler demo using static task creation.
 
 ## Stretch Features
 
@@ -143,7 +158,7 @@ media/      Demo images, GIFs, or videos
 
 ## Current Status
 
-Current phase: Implementation Phase 3 - real FreeRTOS backend preparation.
+Current phase: Implementation Phase 5 - RTOS communication refinement.
 
 Completed so far:
 
@@ -156,22 +171,28 @@ Completed so far:
 - Host demo refactored to drive the task layer instead of duplicating command orchestration.
 - GitHub Actions CI workflow for CMake build, CTest, and Python smoke testing.
 - FreeRTOS-Kernel added as a Git submodule under `third_party/FreeRTOS-Kernel`.
-- CMake option `USE_FREERTOS` added for future backend selection.
-- Placeholder `firmware/App/rtos/rtos_port_freertos.c` created for the real FreeRTOS backend.
+- CMake option `USE_FREERTOS` added for backend selection.
+- `firmware/App/rtos/rtos_port_freertos.c` maps the project RTOS wrapper to real FreeRTOS APIs.
+- CI validates both `USE_FREERTOS=OFF` and `USE_FREERTOS=ON` build/test paths.
+- FreeRTOS scheduler demo creates command, motion, telemetry, and supervisor tasks with `xTaskCreateStatic`.
 - CMake/CTest unit tests for telemetry, command parser, motion controller, fault manager, RTOS port, and app tasks.
 - Python host-demo integration smoke test.
+- Python FreeRTOS scheduler-demo smoke test.
 
 Next implementation steps:
 
-- Implement `rtos_port_freertos.c` by mapping the wrapper API to real FreeRTOS queue, semaphore, and event-group APIs.
-- Update CMake so `USE_FREERTOS=OFF` uses `rtos_port_host.c` and `USE_FREERTOS=ON` uses `rtos_port_freertos.c`.
-- Add the required FreeRTOS configuration and target/portable layer before starting the real scheduler.
+- Move telemetry through a queue or stream-style path so reporting is decoupled from task logic.
+- Clarify the fault handling path as the scheduler layer grows.
+- Keep the existing host backend and tests as the stable regression path.
 
 Current validation status:
 
 ```text
-6/6 CTest suites passing
+Host build: 6/6 CTest suites passing
+FreeRTOS build: 7/7 CTest suites passing
 Python host-demo smoke test passing
+Python FreeRTOS scheduler-demo smoke test passing
+Both host and FreeRTOS scheduler builds passing
 ```
 
 ## Learning Goals
@@ -180,6 +201,6 @@ By completing this project, I will understand how RTOS-based firmware is structu
 
 ## Resume Keywords
 
-`C`, `CMake`, `CTest`, `GitHub Actions`, `CI/CD`, `ARM GCC`, `embedded systems`, `motion control`, `state machines`, `fault handling`, `telemetry`, `firmware testing`, `RTOS-style queues`, `mutexes`, `event groups`, `task architecture`
+`C`, `CMake`, `CTest`, `GitHub Actions`, `CI/CD`, `FreeRTOS`, `ARM GCC`, `embedded systems`, `motion control`, `state machines`, `fault handling`, `telemetry`, `firmware testing`, `RTOS queues`, `mutexes`, `event groups`, `task architecture`, `static task creation`, `scheduler startup`
 
-Planned keywords after future integration: `FreeRTOS scheduler`, `QEMU`, `UART`, `Python`, `ARM Cortex-M`
+Planned keywords after future integration: `QEMU`, `UART`, `Python`, `ARM Cortex-M`, `PID control`

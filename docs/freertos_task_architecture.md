@@ -8,7 +8,7 @@ The goal is to move from a single host-side control loop toward a task-based emb
 
 ## Current Project Stage
 
-The current project is a host-side C simulator with a FreeRTOS-style task layer, CI validation, and a real FreeRTOS kernel dependency prepared as a submodule. It supports:
+The current project is a host-side C simulator with a FreeRTOS-style task layer, CI validation, a real FreeRTOS backend for wrapper primitives, and a scheduler-driven FreeRTOS demo. It supports:
 
 - Command parsing for `PING`, `STATUS`, `MOVE`, `STOP`, `ESTOP`, and `CLEAR_FAULT`
 - Simulated X/Y motion using milli-millimeter units
@@ -18,8 +18,10 @@ The current project is a host-side C simulator with a FreeRTOS-style task layer,
 - A Python host demo smoke test
 - GitHub Actions validation on push and pull request
 - FreeRTOS-Kernel tracked under `third_party/FreeRTOS-Kernel`
+- `USE_FREERTOS=ON` backend builds using real FreeRTOS queue, mutex, and event-group APIs
+- A FreeRTOS POSIX scheduler demo using static command, motion, telemetry, and supervisor tasks
 
-The FreeRTOS-style task boundaries and communication primitives have been introduced on the host. The real FreeRTOS dependency is present, but the project does not run a real FreeRTOS scheduler yet.
+The FreeRTOS-style task boundaries and communication primitives have been introduced on the host. The real FreeRTOS backend now validates primitives and starts real FreeRTOS tasks through the POSIX simulator port.
 
 ## Task Overview
 
@@ -54,12 +56,29 @@ TelemetryTask
 Telemetry output
 ```
 
+Current scheduler demo flow:
+
+```text
+main_freertos_scheduler.c
+        |
+        v
+app_scheduler_start()
+        |
+        +--> xTaskCreateStatic(CommandTask)
+        +--> xTaskCreateStatic(MotionTask)
+        +--> xTaskCreateStatic(TelemetryTask)
+        +--> xTaskCreateStatic(SupervisorTask)
+        |
+        v
+vTaskStartScheduler()
+```
+
 ## FreeRTOS Primitives To Use
 
 | Primitive | Planned Use | Why It Exists |
 |---|---|---|
 | Queue | Pass parsed commands from `CommandTask` to `MotionTask` | Tasks should communicate through bounded messages instead of shared globals |
-| Queue or stream buffer | Pass telemetry text or telemetry snapshots | Telemetry output should not block motion/control logic |
+| Queue or stream buffer | Future path for telemetry text or telemetry snapshots | Telemetry output should not block motion/control logic |
 | Mutex | Protect shared motion and fault state | Multiple tasks may read or update state after FreeRTOS scheduling is introduced |
 | Event group | Track flags such as `MOVING`, `FAULTED`, and `STOP_REQUESTED` | System-level flags should be visible without tightly coupling modules |
 
@@ -162,9 +181,9 @@ This layer is covered by the `app_tasks` CTest suite.
 
 GitHub Actions now builds the host project, runs CTest, and runs the Python host-demo smoke test on push and pull request.
 
-### Current Slice 5: Real FreeRTOS Backend Preparation
+### Completed Slice 5: Real FreeRTOS Backend Wrapper
 
-FreeRTOS-Kernel is now tracked as a Git submodule:
+FreeRTOS-Kernel is tracked as a Git submodule:
 
 ```text
 third_party/FreeRTOS-Kernel
@@ -176,13 +195,39 @@ The project has a CMake backend-selection option:
 USE_FREERTOS
 ```
 
-The real backend placeholder is:
+The real backend implementation is:
 
 ```text
 firmware/App/rtos/rtos_port_freertos.c
 ```
 
-The next implementation step is to map the wrapper APIs in `rtos_port.h` to real FreeRTOS queue, semaphore, and event-group APIs without breaking the default host backend.
+`rtos_port_freertos.c` maps the wrapper APIs in `rtos_port.h` to real FreeRTOS queue, semaphore, and event-group APIs without breaking the default host backend.
+
+### Completed Slice 6: Real Scheduler Startup
+
+Scheduler startup files have been added:
+
+```text
+firmware/App/tasks/
+  app_scheduler.h
+  app_scheduler.c
+
+firmware/Core/
+  main_freertos_scheduler.c
+```
+
+This slice adds:
+
+- Real FreeRTOS task entry functions for command, motion, telemetry, and demo supervision
+- Static task stack/control-block storage
+- Scheduler startup through `vTaskStartScheduler`
+- A finite POSIX scheduler demo that exits cleanly for CI
+- A CTest entry named `freertos_scheduler_demo`
+- A Python smoke test named `tests/hil/test_freertos_scheduler_demo.py`
+
+### Current Slice 7: RTOS Communication Refinement
+
+The next implementation step is to decouple telemetry output from task execution and clarify the fault-handling path.
 
 ## Testing Strategy
 
@@ -199,22 +244,26 @@ New tests should be added incrementally:
 - Motion update through the task path
 - Host-demo regression after `main.c` uses the task layer
 - CI regression on push and pull request
-- Future `USE_FREERTOS=ON` backend build test
+- `USE_FREERTOS=ON` backend build and smoke test
+- FreeRTOS scheduler demo startup and bounded shutdown
+- FreeRTOS scheduler smoke test command flow
 
 ## Known Limitations
 
-- This project does not yet run a real FreeRTOS scheduler.
-- `rtos_port_freertos.c` is currently a backend placeholder and is not the default host backend.
-- `USE_FREERTOS=ON` is not yet wired to a complete FreeRTOS target.
+- The default developer path still uses the host RTOS wrapper for fast local tests.
+- The scheduler demo currently uses scripted commands instead of UART input.
+- Telemetry is still written directly through the telemetry writer instead of a telemetry queue.
+- Fault handling is implemented through the motion/task path rather than a dedicated `FaultTask`.
 - The current simulator does not interact with physical motors or sensors.
-- Timing is simulated using fixed tick values.
+- Timing uses fixed task periods in the software scheduler demo.
 - Hardware-specific validation is deferred until QEMU or physical hardware support is added.
 
 ## Next Decision
 
-The host-side wrapper path has been selected and implemented, the host demo uses the task layer, CI is active, and the FreeRTOS dependency is available. The next decision is how to complete the real FreeRTOS backend:
+The host-side wrapper path, real FreeRTOS backend wrapper, and scheduler demo are implemented. The next decision is how to improve task communication without overcomplicating the project:
 
-1. Select the first real backend target or portable layer.
-2. Add the required `FreeRTOSConfig.h`.
-3. Wire `USE_FREERTOS=ON` to compile `rtos_port_freertos.c`.
-4. Keep `USE_FREERTOS=OFF` as the stable host-test path.
+1. Add a telemetry message queue or stream-style wrapper.
+2. Route telemetry publication through `TelemetryTask`.
+3. Keep direct host tests for formatting behavior.
+4. Clarify whether fault handling remains inside `MotionTask` or becomes a separate `FaultTask`.
+5. Keep `USE_FREERTOS=OFF` as the stable host-test path.
