@@ -66,15 +66,15 @@ The task layer uses a command queue, a state mutex, and event bits for `MOVING`,
 third_party/FreeRTOS-Kernel
 ```
 
-The FreeRTOS kernel is present as a Git submodule for the upcoming real backend phase. The current default host build still uses `firmware/App/rtos/rtos_port_host.c`.
+The FreeRTOS kernel is present as a Git submodule for the real backend phase. The current default host build still uses `firmware/App/rtos/rtos_port_host.c`.
 
-The planned real backend file is:
+The real backend file is:
 
 ```text
 firmware/App/rtos/rtos_port_freertos.c
 ```
 
-The CMake option for future backend selection is:
+The CMake option for backend selection is:
 
 ```text
 USE_FREERTOS
@@ -101,4 +101,4 @@ sim/plant_sim.py             Future simulated hardware model
 
 ## Notes
 
-The current version keeps simulation simple while preparing the dependency and build structure for real FreeRTOS. Later versions can add real scheduler startup, QEMU execution, PID control, acceleration profiles, limit switches, and more detailed plant simulation.
+The current version keeps simulation simple while validating the wrapper against real FreeRTOS primitives. Later versions can add real scheduler startup, QEMU execution, PID control, acceleration profiles, limit switches, and more detailed plant simulation.

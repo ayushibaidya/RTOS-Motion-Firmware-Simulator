@@ -1,13 +1,18 @@
 #!/usr/bin/env python3
 
 from pathlib import Path
+import os
 import subprocess
 import sys
 
 
 def main() -> int:
     repo_root = Path(__file__).resolve().parents[2]
-    demo_path = repo_root / "build" / "mr_robo_demo"
+    configured_demo_path = os.environ.get("DEMO_PATH")
+    demo_path = Path(configured_demo_path) if configured_demo_path else repo_root / "build" / "mr_robo_demo"
+
+    if not demo_path.is_absolute():
+        demo_path = repo_root / demo_path
 
     if not demo_path.exists():
         print(f"missing demo executable: {demo_path}", file=sys.stderr)

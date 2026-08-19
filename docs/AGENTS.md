@@ -24,7 +24,7 @@ Before implementing a feature, read the relevant requirement and design sections
 
 ## Current SDLC Phase
 
-Current phase: Implementation Phase 3 - real FreeRTOS backend preparation.
+Current phase: Implementation Phase 4 - FreeRTOS scheduler/task startup.
 
 Completed:
 
@@ -43,18 +43,19 @@ Completed:
 - Python host-demo smoke test
 - GitHub Actions CI workflow
 - FreeRTOS-Kernel Git submodule under `third_party/FreeRTOS-Kernel`
-- CMake `USE_FREERTOS` option for future backend selection
-- Placeholder real FreeRTOS backend file
+- CMake `USE_FREERTOS` option for backend selection
+- Real FreeRTOS backend wrapper in `rtos_port_freertos.c`
 
 In progress:
 
-- Real FreeRTOS backend planning and implementation
+- Real FreeRTOS scheduler/task startup planning and implementation
 
 Planned next:
 
-- Map `rtos_port_freertos.c` to real FreeRTOS queue, semaphore, and event-group APIs
-- Wire `USE_FREERTOS=ON` after `FreeRTOSConfig.h` and a portable layer are selected
-- Add QEMU after the real backend can compile
+- Add real FreeRTOS task entry functions
+- Add static task stack/control-block storage
+- Start the scheduler with `vTaskStartScheduler`
+- Add QEMU after scheduler startup is stable
 
 ## Implementation Principles
 
@@ -308,8 +309,10 @@ Do not fix unrelated tests or unrelated modules during focused implementation.
 - `cmake/arm-none-eabi.cmake` configures CMake for ARM builds.
 - `.github/workflows/ci.yml` runs CMake, CTest, and the Python host-demo smoke test on GitHub.
 - `third_party/FreeRTOS-Kernel` is tracked as a Git submodule.
-- `USE_FREERTOS` exists as a CMake option but the default host build still uses `rtos_port_host.c`.
+- `USE_FREERTOS=OFF` uses `rtos_port_host.c`.
+- `USE_FREERTOS=ON` uses `rtos_port_freertos.c` and FreeRTOS-Kernel sources.
 - The FreeRTOS-style host wrapper and task layer are active.
+- Real FreeRTOS primitive integration is active.
 - Real FreeRTOS scheduler integration and QEMU execution are planned, not yet active.
 
 ## Agent Behavior Rules

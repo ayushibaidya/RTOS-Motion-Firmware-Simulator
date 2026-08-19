@@ -2,9 +2,9 @@
 
 ## System Overview
 
-This project implements software-first motion-control firmware for a simulated 2-axis stage. The current project runs as a host-side C demo executable, includes a FreeRTOS-style task layer, and has CI validation so the core firmware behavior can be tested before ARM, real FreeRTOS, and QEMU integration.
+This project implements software-first motion-control firmware for a simulated 2-axis stage. The current project runs as a host-side C demo executable, includes a FreeRTOS-style task layer, provides a real FreeRTOS backend for wrapper primitives, and has CI validation so the core firmware behavior can be tested before ARM/QEMU integration.
 
-The current demo drives host-callable task-step functions that model `CommandTask`, `MotionTask`, `TelemetryTask`, and a fault-handling path. Those task steps send text commands through the command parser, update simulated 2-axis motion state, report telemetry, and handle stop/fault behavior. The real FreeRTOS kernel is tracked as a third-party submodule, but the default host build still uses the host RTOS wrapper. Future phases will connect the task boundaries to an emulated ARM Cortex-M + real FreeRTOS environment with Python host tools.
+The current demo drives host-callable task-step functions that model `CommandTask`, `MotionTask`, `TelemetryTask`, and a fault-handling path. Those task steps send text commands through the command parser, update simulated 2-axis motion state, report telemetry, and handle stop/fault behavior. The real FreeRTOS kernel is tracked as a third-party submodule, and `USE_FREERTOS=ON` builds the project wrapper against real FreeRTOS primitive APIs. Future phases will start a real scheduler and then connect the task boundaries to an emulated ARM Cortex-M environment with Python host tools.
 
 The system is software-only but is designed to resemble a real embedded motion-control system.
 
@@ -181,9 +181,9 @@ Current backend status:
 | Backend | File | Status |
 |---|---|---|
 | Host wrapper | `firmware/App/rtos/rtos_port_host.c` | Active default backend for host builds and CI |
-| Real FreeRTOS wrapper | `firmware/App/rtos/rtos_port_freertos.c` | Placeholder for future FreeRTOS API mapping |
+| Real FreeRTOS wrapper | `firmware/App/rtos/rtos_port_freertos.c` | Implemented for FreeRTOS queue, mutex, and event-group APIs |
 
-The next backend design step is to map the wrapper API to real FreeRTOS primitives:
+The real backend maps the wrapper API to FreeRTOS primitives:
 
 | Wrapper API | Planned FreeRTOS API |
 |---|---|
@@ -191,7 +191,7 @@ The next backend design step is to map the wrapper API to real FreeRTOS primitiv
 | `rtos_mutex_lock` / `rtos_mutex_unlock` | `xSemaphoreTake` / `xSemaphoreGive` |
 | event group set/clear/get | FreeRTOS event group APIs |
 
-The real backend must not replace the host backend until the required FreeRTOS configuration, portable layer, and CMake target selection are in place.
+The real backend currently validates FreeRTOS primitive integration. It does not yet create real scheduler tasks or call `vTaskStartScheduler`.
 
 ## Command Protocol
 
@@ -396,6 +396,7 @@ Future unit test areas:
 - PID controller
 - Fault injection behavior
 - Real FreeRTOS backend adapter behavior
+- Scheduler-driven FreeRTOS task execution
 
 ### Integration Tests
 
