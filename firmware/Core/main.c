@@ -37,7 +37,11 @@ static bool main_run_command(app_context_t *context, const char *line, uint32_t 
         return false;
     }
 
-    return app_motion_task_step(context, delta_ms) == APP_TASK_STATUS_OK;
+    if (app_motion_task_step(context, delta_ms) != APP_TASK_STATUS_OK) {
+        return false;
+    }
+
+    return app_telemetry_task_step(context) == APP_TASK_STATUS_OK;
 }
 
 /* Scheduler ticks are represented explicitly in the host demo so motion timing
@@ -84,11 +88,6 @@ int main(void){
             }
         }
 
-        if (step == 2u || step == 3u) {
-            if (app_telemetry_task_step(&context) != APP_TASK_STATUS_OK) {
-                return 1;
-            }
-        }
     }
 
     return 0;

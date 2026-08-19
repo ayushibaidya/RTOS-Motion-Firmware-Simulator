@@ -7,6 +7,7 @@
 
 #include <stdbool.h>
 #include <stddef.h>
+#include <string.h>
 
 static const char APP_RESPONSE_PONG[] = "OK PONG";
 static const char APP_RESPONSE_STATUS[] = "OK STATUS";
@@ -22,6 +23,40 @@ static const char APP_ERROR_UNKNOWN_COMMAND[] = "ERR UNKNOWN_COMMAND";
 static bool app_context_is_valid(const app_context_t *context)
 {
     return context != NULL;
+}
+
+static bool app_tasks_enqueue_telemetry_line(app_context_t *context, const char *line)
+{
+    app_telemetry_message_t message;
+    size_t line_length;
+
+    /* Responses are queued so command/motion work cannot directly own the
+     * output path once real RTOS tasks run concurrently.
+     */
+    if (!app_context_is_valid(context) || line == NULL) {
+        return false;
+    }
+
+    line_length = strlen(line);
+
+    if (line_length >= sizeof(message.text)) {
+        return false;
+    }
+
+    memcpy(message.text, line, line_length + 1u);
+    return rtos_queue_send(&context->telemetry_queue, &message);
+}
+
+static void app_tasks_drain_telemetry_queue(app_context_t *context)
+{
+    app_telemetry_message_t message;
+
+    /* TelemetryTask is the only place that writes queued task responses, which
+     * keeps reporting decoupled from command parsing and motion updates.
+     */
+    while (rtos_queue_receive(&context->telemetry_queue, &message)) {
+        telemetry_send_line(message.text);
+    }
 }
 
 static void app_tasks_refresh_motion_events(app_context_t *context)
@@ -128,6 +163,15 @@ bool app_tasks_init(app_context_t *context, telemetry_write_fn_t telemetry_write
         return false;
     }
 
+    if (!rtos_queue_init(
+            &context->telemetry_queue,
+            context->telemetry_queue_storage,
+            sizeof(context->telemetry_queue_storage[0]),
+            APP_TELEMETRY_QUEUE_CAPACITY
+        )) {
+        return false;
+    }
+
     if (!rtos_mutex_init(&context->state_mutex)) {
         return false;
     }
@@ -157,7 +201,13 @@ app_task_status_t app_command_task_step(app_context_t *context, const char *line
     parse_result = command_parser_parse(line, &message.command);
 
     if (parse_result != COMMAND_PARSE_OK) {
-        telemetry_send_line(command_parser_result_to_string(parse_result));
+        if (!app_tasks_enqueue_telemetry_line(
+                context,
+                command_parser_result_to_string(parse_result)
+            )) {
+            return APP_TASK_STATUS_ERROR_QUEUE_FULL;
+        }
+
         return APP_TASK_STATUS_ERROR_PARSE;
     }
 
@@ -196,8 +246,8 @@ app_task_status_t app_motion_task_step(app_context_t *context, uint32_t delta_ms
         return APP_TASK_STATUS_ERROR_MUTEX;
     }
 
-    if (response != NULL) {
-        telemetry_send_line(response);
+    if (response != NULL && !app_tasks_enqueue_telemetry_line(context, response)) {
+        return APP_TASK_STATUS_ERROR_QUEUE_FULL;
     }
 
     if (!has_message) {
@@ -232,6 +282,7 @@ app_task_status_t app_telemetry_task_step(app_context_t *context)
         return APP_TASK_STATUS_ERROR_MUTEX;
     }
 
+    app_tasks_drain_telemetry_queue(context);
     telemetry_send_status(&telemetry_status);
     return APP_TASK_STATUS_OK;
 }
@@ -243,6 +294,15 @@ size_t app_tasks_command_queue_count(const app_context_t *context)
     }
 
     return rtos_queue_count(&context->command_queue);
+}
+
+size_t app_tasks_telemetry_queue_count(const app_context_t *context)
+{
+    if (!app_context_is_valid(context)) {
+        return 0u;
+    }
+
+    return rtos_queue_count(&context->telemetry_queue);
 }
 
 rtos_event_bits_t app_tasks_get_events(const app_context_t *context)
