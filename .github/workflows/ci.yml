@@ -7,11 +7,20 @@ on:
 jobs:
   build-and-test:
     runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        backend:
+          - name: host
+            build-dir: build
+            cmake-args: -DUSE_FREERTOS=OFF
+          - name: freertos
+            build-dir: build-freertos
+            cmake-args: -DUSE_FREERTOS=ON
 
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
-        with: 
+        with:
           submodules: recursive
 
       - name: Install build tools
@@ -20,13 +29,21 @@ jobs:
           sudo apt-get install -y cmake ninja-build python3
 
       - name: Configure CMake
-        run: cmake -S . -B build -G Ninja
+        run: cmake -S . -B ${{ matrix.backend.build-dir }} -G Ninja ${{ matrix.backend.cmake-args }}
 
       - name: Build
-        run: cmake --build build
+        run: cmake --build ${{ matrix.backend.build-dir }}
 
       - name: Run CTest
-        run: ctest --test-dir build --output-on-failure
+        run: ctest --test-dir ${{ matrix.backend.build-dir }} --output-on-failure
 
       - name: Run Python smoke test
+        env:
+          DEMO_PATH: ${{ matrix.backend.build-dir }}/mr_robo_demo
         run: python3 tests/hil/test_host_demo.py
+
+      - name: Run FreeRTOS scheduler smoke test
+        if: matrix.backend.name == 'freertos'
+        env:
+          DEMO_PATH: ${{ matrix.backend.build-dir }}/motion_freertos_scheduler_demo
+        run: python3 tests/hil/test_freertos_scheduler_demo.py

@@ -22,6 +22,57 @@ set(APP_DIR ${FIRMWARE_DIR}/App)
 set(CORE_DIR ${FIRMWARE_DIR}/Core)
 set(DRIVERS_DIR ${FIRMWARE_DIR}/Drivers)
 
+set(RTOS_PORT_SOURCES
+    ${APP_DIR}/rtos/rtos_port_host.c
+)
+set(RTOS_INCLUDE_DIRS
+    ${APP_DIR}/rtos
+)
+set(RTOS_COMPILE_DEFINITIONS)
+set(RTOS_LINK_LIBRARIES)
+
+if(USE_FREERTOS)
+    set(FREERTOS_KERNEL_DIR ${CMAKE_CURRENT_SOURCE_DIR}/third_party/FreeRTOS-Kernel)
+
+    set(RTOS_PORT_SOURCES
+        ${APP_DIR}/rtos/rtos_port_freertos.c
+        ${FREERTOS_KERNEL_DIR}/tasks.c
+        ${FREERTOS_KERNEL_DIR}/queue.c
+        ${FREERTOS_KERNEL_DIR}/list.c
+        ${FREERTOS_KERNEL_DIR}/event_groups.c
+        ${FREERTOS_KERNEL_DIR}/portable/ThirdParty/GCC/Posix/port.c
+        ${FREERTOS_KERNEL_DIR}/portable/ThirdParty/GCC/Posix/utils/wait_for_event.c
+    )
+    list(APPEND RTOS_INCLUDE_DIRS
+        ${FIRMWARE_DIR}/Config
+        ${FREERTOS_KERNEL_DIR}/include
+        ${FREERTOS_KERNEL_DIR}/portable/ThirdParty/GCC/Posix
+        ${FREERTOS_KERNEL_DIR}/portable/ThirdParty/GCC/Posix/utils
+    )
+    list(APPEND RTOS_COMPILE_DEFINITIONS USE_FREERTOS=1)
+
+    find_package(Threads REQUIRED)
+    list(APPEND RTOS_LINK_LIBRARIES Threads::Threads)
+endif()
+
+function(configure_rtos_target target_name)
+    target_include_directories(${target_name} PRIVATE
+        ${RTOS_INCLUDE_DIRS}
+    )
+
+    if(RTOS_COMPILE_DEFINITIONS)
+        target_compile_definitions(${target_name} PRIVATE
+            ${RTOS_COMPILE_DEFINITIONS}
+        )
+    endif()
+
+    if(RTOS_LINK_LIBRARIES)
+        target_link_libraries(${target_name} PRIVATE
+            ${RTOS_LINK_LIBRARIES}
+        )
+    endif()
+endfunction()
+
 # Firmware sources will be added here once implementation begins.
 # Example future layout:
 # set(FIRMWARE_SOURCES
@@ -45,7 +96,7 @@ if(NOT CMAKE_CROSSCOMPILING)
     add_executable(mr_robo_demo
         ${CORE_DIR}/main.c
         ${APP_DIR}/tasks/app_tasks.c
-        ${APP_DIR}/rtos/rtos_port_host.c
+        ${RTOS_PORT_SOURCES}
         ${APP_DIR}/command/command_parser.c
         ${APP_DIR}/fault/fault_manager.c
         ${APP_DIR}/motion/motion_controller.c
@@ -53,12 +104,12 @@ if(NOT CMAKE_CROSSCOMPILING)
     )
     target_include_directories(mr_robo_demo PRIVATE
         ${APP_DIR}/tasks
-        ${APP_DIR}/rtos
         ${APP_DIR}/command
         ${APP_DIR}/fault
         ${APP_DIR}/motion
         ${APP_DIR}/telemetry
     )
+    configure_rtos_target(mr_robo_demo)
 
     add_executable(test_telemetry
         tests/unit/test_telemetry.c
@@ -98,17 +149,15 @@ if(NOT CMAKE_CROSSCOMPILING)
 
     add_executable(test_rtos_port
         tests/unit/test_rtos_port.c
-        ${APP_DIR}/rtos/rtos_port_host.c
+        ${RTOS_PORT_SOURCES}
     )
-    target_include_directories(test_rtos_port PRIVATE
-        ${APP_DIR}/rtos
-    )
+    configure_rtos_target(test_rtos_port)
     add_test(NAME rtos_port COMMAND test_rtos_port)
 
     add_executable(test_app_tasks
         tests/unit/test_app_tasks.c
         ${APP_DIR}/tasks/app_tasks.c
-        ${APP_DIR}/rtos/rtos_port_host.c
+        ${RTOS_PORT_SOURCES}
         ${APP_DIR}/command/command_parser.c
         ${APP_DIR}/fault/fault_manager.c
         ${APP_DIR}/motion/motion_controller.c
@@ -116,11 +165,35 @@ if(NOT CMAKE_CROSSCOMPILING)
     )
     target_include_directories(test_app_tasks PRIVATE
         ${APP_DIR}/tasks
-        ${APP_DIR}/rtos
         ${APP_DIR}/command
         ${APP_DIR}/fault
         ${APP_DIR}/motion
         ${APP_DIR}/telemetry
     )
+    configure_rtos_target(test_app_tasks)
     add_test(NAME app_tasks COMMAND test_app_tasks)
+
+    if(USE_FREERTOS)
+        add_executable(motion_freertos_scheduler_demo
+            ${CORE_DIR}/main_freertos_scheduler.c
+            ${APP_DIR}/tasks/app_scheduler.c
+            ${APP_DIR}/tasks/app_tasks.c
+            ${RTOS_PORT_SOURCES}
+            ${APP_DIR}/command/command_parser.c
+            ${APP_DIR}/fault/fault_manager.c
+            ${APP_DIR}/motion/motion_controller.c
+            ${APP_DIR}/telemetry/telemetry.c
+        )
+        target_include_directories(motion_freertos_scheduler_demo PRIVATE
+            ${APP_DIR}/tasks
+            ${APP_DIR}/command
+            ${APP_DIR}/fault
+            ${APP_DIR}/motion
+            ${APP_DIR}/telemetry
+        )
+        configure_rtos_target(motion_freertos_scheduler_demo)
+
+        add_test(NAME freertos_scheduler_demo COMMAND motion_freertos_scheduler_demo)
+        set_tests_properties(freertos_scheduler_demo PROPERTIES TIMEOUT 10)
+    endif()
 endif()
