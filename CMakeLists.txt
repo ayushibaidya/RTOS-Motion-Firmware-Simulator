@@ -147,6 +147,15 @@ if(NOT CMAKE_CROSSCOMPILING)
     )
     add_test(NAME fault_manager COMMAND test_fault_manager)
 
+    add_executable(test_pid_controller
+        tests/unit/test_pid_controller.c
+        ${APP_DIR}/pid/pid_controller.c
+    )
+    target_include_directories(test_pid_controller PRIVATE
+        ${APP_DIR}/pid
+    )
+    add_test(NAME pid_controller COMMAND test_pid_controller)
+
     add_executable(test_rtos_port
         tests/unit/test_rtos_port.c
         ${RTOS_PORT_SOURCES}
