@@ -2,9 +2,9 @@
 
 ## System Overview
 
-This project implements software-first motion-control firmware for a simulated 2-axis stage. The current project runs as a host-side C demo executable, includes a FreeRTOS-style task layer, provides a real FreeRTOS backend for wrapper primitives, and has CI validation so the core firmware behavior can be tested before ARM/QEMU integration.
+This project implements software-first motion-control firmware for a simulated 2-axis stage. The current project runs as a host-side C demo executable, includes a FreeRTOS-style task layer, provides a real FreeRTOS backend for wrapper primitives, includes a scheduler-backed FreeRTOS POSIX demo, and has CI validation so the core firmware behavior can be tested before ARM/QEMU integration.
 
-The current demo drives host-callable task-step functions that model `CommandTask`, `MotionTask`, `TelemetryTask`, and a fault-handling path. Those task steps send text commands through the command parser, update simulated 2-axis motion state, report telemetry, and handle stop/fault behavior. The real FreeRTOS kernel is tracked as a third-party submodule, and `USE_FREERTOS=ON` builds the project wrapper against real FreeRTOS primitive APIs. Future phases will start a real scheduler and then connect the task boundaries to an emulated ARM Cortex-M environment with Python host tools.
+The current host demo drives host-callable task-step functions that model `CommandTask`, `MotionTask`, `TelemetryTask`, and a fault-handling path. The FreeRTOS scheduler demo wraps the same task layer with real FreeRTOS task entry functions. Those task paths send text commands through the command parser, update simulated 2-axis motion state, route command responses through a telemetry queue, and handle stop/fault behavior. The real FreeRTOS kernel is tracked as a third-party submodule, and `USE_FREERTOS=ON` builds the project wrapper against real FreeRTOS primitive APIs. Future phases will connect the task boundaries to an emulated ARM Cortex-M environment with Python host tools.
 
 The system is software-only but is designed to resemble a real embedded motion-control system.
 
@@ -26,7 +26,7 @@ FreeRTOS-style Task Layer
 
 ## Current Module Design
 
-The project keeps the core logic in plain C modules and wraps those modules with host-callable task-step functions. This keeps the firmware testable before real scheduler behavior is introduced.
+The project keeps the core logic in plain C modules and wraps those modules with host-callable task-step functions. This keeps the default host path testable while the FreeRTOS scheduler demo reuses the same module boundaries.
 
 ### Command Parser
 
@@ -79,7 +79,7 @@ Responsibilities:
 
 ## Current FreeRTOS-Style Task Design
 
-The current task layer uses one-step functions to model FreeRTOS tasks without starting a real scheduler. This allows CTest to verify task communication and fault behavior on the host.
+The current task layer uses one-step functions to model FreeRTOS tasks in host tests. The scheduler demo then wraps those same boundaries with real FreeRTOS task entry functions.
 
 ### Command Task
 
@@ -108,7 +108,7 @@ Responsibilities:
 
 ### Telemetry Task
 
-The Telemetry Task step periodically sends system status to the host.
+The Telemetry Task step drains queued task responses and periodically sends system status to the host.
 
 Responsibilities:
 
@@ -120,11 +120,12 @@ Responsibilities:
 
 ### Fault Handling Path
 
-Fault handling currently runs inside the task orchestration path rather than a separate `FaultTask`.
+Fault handling currently runs inside the task orchestration path rather than a separate `FaultTask`. The command handler dispatches fault-specific behavior to focused helper functions so safety transitions are easier to review and can later move toward a dedicated fault task if needed.
 
 Responsibilities:
 
 - Process `ESTOP`.
+- Process out-of-bounds targets as limit faults.
 - Track fault flags through the fault manager and event group.
 - Prevent new movement while in fault state.
 - Process explicit fault recovery with `CLEAR_FAULT`.
@@ -143,12 +144,13 @@ Possible responsibilities:
 
 ## Inter-Task Communication
 
-The current host-side RTOS wrapper provides bounded queues, mutexes, and event groups. These wrappers are intentionally shaped like FreeRTOS primitives but do not run a real scheduler yet.
+The current host-side RTOS wrapper provides bounded queues, mutexes, and event groups. These wrappers are intentionally shaped like FreeRTOS primitives so the same task code can run through either the host backend or the real FreeRTOS POSIX backend.
 
 Current communication:
 
 ```text
 command_queue      CommandTask step -> MotionTask step
+telemetry_queue    Command/Motion responses -> TelemetryTask step
 state_mutex        Protects motion/fault snapshots in task-step tests
 event_group        Tracks MOVING, FAULTED, and STOP_REQUESTED flags
 ```
@@ -297,6 +299,13 @@ Fields:
 ## Fault Handling
 
 The firmware shall support emergency stop behavior.
+
+The task layer routes fault-specific cases through helper functions in `app_tasks.c`:
+
+- fault-active `MOVE` rejection
+- out-of-bounds limit faults
+- emergency stop handling
+- explicit fault recovery
 
 When `ESTOP` is received:
 

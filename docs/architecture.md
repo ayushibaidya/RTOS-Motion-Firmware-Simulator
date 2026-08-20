@@ -5,8 +5,8 @@
 This project currently has three main parts:
 
 - Host-side C firmware modules that simulate a 2-axis motion stage.
-- A FreeRTOS-style task layer that models task communication without a real scheduler.
-- Python host tests that run the demo executable and check expected output.
+- A task layer that can run as host-callable steps or under the FreeRTOS POSIX scheduler demo.
+- Python host tests that run the demo executables and check expected output.
 - GitHub Actions CI that repeats build and test validation after code is pushed.
 
 The firmware is designed like a real embedded motion controller, even though the hardware is simulated and no physical device is required.
@@ -23,7 +23,7 @@ Command Parser
 FreeRTOS-style Task Layer
         |
         v
-Motion state + telemetry + fault handling
+Motion state + telemetry queue + fault handling
 ```
 
 ## Current Task-Layer Components
@@ -31,11 +31,11 @@ Motion state + telemetry + fault handling
 ```text
 CommandTask step     Parses host commands and queues validated command messages
 MotionTask step      Consumes command messages and updates simulated X/Y motion
-TelemetryTask step   Reports status snapshots to host output
-Fault path           Handles ESTOP, bounds faults, and explicit recovery
+TelemetryTask step   Drains queued responses and reports status snapshots
+Fault path           Routes ESTOP, bounds faults, and recovery through helpers
 ```
 
-These are implemented as host-callable step functions in `firmware/App/tasks/`. They are not real FreeRTOS tasks yet.
+These are implemented as host-callable step functions in `firmware/App/tasks/`. The FreeRTOS scheduler demo wraps the same task layer with real FreeRTOS task entry functions.
 
 ## Current Data Flow
 
@@ -55,10 +55,13 @@ MotionTask step / fault path
 Motion + fault state
         |
         v
+telemetry_queue
+        |
+        v
 TelemetryTask step
 ```
 
-The task layer uses a command queue, a state mutex, and event bits for `MOVING`, `FAULTED`, and `STOP_REQUESTED`.
+The task layer uses a command queue, telemetry queue, state mutex, and event bits for `MOVING`, `FAULTED`, and `STOP_REQUESTED`.
 
 ## Dependency Layout
 
@@ -66,7 +69,7 @@ The task layer uses a command queue, a state mutex, and event bits for `MOVING`,
 third_party/FreeRTOS-Kernel
 ```
 
-The FreeRTOS kernel is present as a Git submodule for the real backend phase. The current default host build still uses `firmware/App/rtos/rtos_port_host.c`.
+The FreeRTOS kernel is present as a Git submodule for the real backend phase. The default host build still uses `firmware/App/rtos/rtos_port_host.c`, while the FreeRTOS scheduler build uses the POSIX simulator backend.
 
 The real backend file is:
 

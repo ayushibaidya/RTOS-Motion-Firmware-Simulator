@@ -110,7 +110,7 @@ It should use existing telemetry formatting instead of duplicating output string
 
 ### Fault Handling Path
 
-Fault handling may begin as helper functions called by `MotionTask`, then later become a separate `FaultTask` if the design needs it.
+Fault handling now begins as helper functions called by the task orchestration path. These helpers keep `ESTOP`, out-of-bounds limit faults, fault-active move rejection, and `CLEAR_FAULT` recovery separate from the general command dispatcher. This may later become a separate `FaultTask` if the design needs it.
 
 This path owns safety behavior:
 
@@ -225,9 +225,18 @@ This slice adds:
 - A CTest entry named `freertos_scheduler_demo`
 - A Python smoke test named `tests/hil/test_freertos_scheduler_demo.py`
 
-### Current Slice 7: RTOS Communication Refinement
+### Completed Slice 7: RTOS Communication Refinement
 
-The next implementation step is to decouple telemetry output from task execution and clarify the fault-handling path.
+This slice adds:
+
+- A telemetry message queue for task responses
+- `TelemetryTask` ownership of queued response output
+- Fault-specific task-layer helpers for limit faults, `ESTOP`, and `CLEAR_FAULT`
+- Cleaner command dispatch without changing external command behavior
+
+### Current Slice 8: Control-Loop Expansion
+
+The next implementation step is to add a small PID/control-loop module or defer PID and continue refining fault-task boundaries.
 
 ## Testing Strategy
 
@@ -252,18 +261,17 @@ New tests should be added incrementally:
 
 - The default developer path still uses the host RTOS wrapper for fast local tests.
 - The scheduler demo currently uses scripted commands instead of UART input.
-- Telemetry is still written directly through the telemetry writer instead of a telemetry queue.
-- Fault handling is implemented through the motion/task path rather than a dedicated `FaultTask`.
+- Telemetry responses now use a queue, but the final output still uses the configured telemetry writer until UART/QEMU output exists.
+- Fault handling is implemented as task-layer helper functions rather than a dedicated `FaultTask`.
 - The current simulator does not interact with physical motors or sensors.
 - Timing uses fixed task periods in the software scheduler demo.
 - Hardware-specific validation is deferred until QEMU or physical hardware support is added.
 
 ## Next Decision
 
-The host-side wrapper path, real FreeRTOS backend wrapper, and scheduler demo are implemented. The next decision is how to improve task communication without overcomplicating the project:
+The host-side wrapper path, real FreeRTOS backend wrapper, scheduler demo, telemetry queue, and helper-based fault path are implemented. The next decision is whether to expand control behavior now or split fault handling into a real task later:
 
-1. Add a telemetry message queue or stream-style wrapper.
-2. Route telemetry publication through `TelemetryTask`.
-3. Keep direct host tests for formatting behavior.
-4. Clarify whether fault handling remains inside `MotionTask` or becomes a separate `FaultTask`.
-5. Keep `USE_FREERTOS=OFF` as the stable host-test path.
+1. Add a simple PID/control-loop module.
+2. Keep direct host tests for PID behavior.
+3. Decide later whether fault handling remains helper-based or becomes a separate `FaultTask`.
+4. Keep `USE_FREERTOS=OFF` as the stable host-test path.
