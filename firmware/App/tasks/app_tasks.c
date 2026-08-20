@@ -82,6 +82,56 @@ static void app_tasks_refresh_motion_events(app_context_t *context)
     }
 }
 
+static bool app_tasks_is_fault_blocking_move(void)
+{
+    return fault_manager_is_fault_active();
+}
+
+static const char *app_tasks_handle_limit_fault(app_context_t *context)
+{
+    /* Bounds faults are latched through both fault and motion modules so later
+     * recovery requires an explicit CLEAR_FAULT command.
+     */
+    fault_manager_set_fault(FAULT_REASON_LIMIT_EXCEEDED);
+    motion_controller_set_fault();
+    app_tasks_refresh_motion_events(context);
+    return APP_ERROR_LIMIT_EXCEEDED;
+}
+
+static const char *app_tasks_handle_estop(app_context_t *context)
+{
+    /* ESTOP must bypass normal motion completion and immediately publish the
+     * fault bit so safety state is visible to every task.
+     */
+    if (!app_context_is_valid(context)) {
+        return APP_ERROR_UNKNOWN_COMMAND;
+    }
+
+    fault_manager_trigger_estop();
+    motion_controller_set_fault();
+    rtos_event_group_clear_bits(&context->event_group, APP_EVENT_MOVING);
+    rtos_event_group_set_bits(&context->event_group, APP_EVENT_FAULTED);
+    return APP_RESPONSE_ESTOP;
+}
+
+static const char *app_tasks_handle_clear_fault(app_context_t *context)
+{
+    /* Fault recovery clears task-visible event flags together with module state
+     * so stale RTOS bits cannot block the next commanded move.
+     */
+    if (!app_context_is_valid(context)) {
+        return APP_ERROR_UNKNOWN_COMMAND;
+    }
+
+    fault_manager_clear();
+    motion_controller_clear_fault();
+    rtos_event_group_clear_bits(
+        &context->event_group,
+        APP_EVENT_FAULTED | APP_EVENT_MOVING | APP_EVENT_STOP_REQUESTED
+    );
+    return APP_RESPONSE_FAULT_CLEARED;
+}
+
 static const char *app_tasks_handle_command(app_context_t *context, const command_t *command)
 {
     if (!app_context_is_valid(context) || command == NULL) {
@@ -96,15 +146,12 @@ static const char *app_tasks_handle_command(app_context_t *context, const comman
         return APP_RESPONSE_STATUS;
 
     case COMMAND_TYPE_MOVE:
-        if (fault_manager_is_fault_active()) {
+        if (app_tasks_is_fault_blocking_move()) {
             return APP_ERROR_FAULT_ACTIVE;
         }
 
         if (!motion_controller_is_target_in_bounds(command->x_milli_mm, command->y_milli_mm)) {
-            fault_manager_set_fault(FAULT_REASON_LIMIT_EXCEEDED);
-            motion_controller_set_fault();
-            app_tasks_refresh_motion_events(context);
-            return APP_ERROR_LIMIT_EXCEEDED;
+            return app_tasks_handle_limit_fault(context);
         }
 
         rtos_event_group_clear_bits(&context->event_group, APP_EVENT_STOP_REQUESTED);
@@ -127,20 +174,10 @@ static const char *app_tasks_handle_command(app_context_t *context, const comman
         return APP_RESPONSE_STOPPED;
 
     case COMMAND_TYPE_ESTOP:
-        fault_manager_trigger_estop();
-        motion_controller_set_fault();
-        rtos_event_group_clear_bits(&context->event_group, APP_EVENT_MOVING);
-        rtos_event_group_set_bits(&context->event_group, APP_EVENT_FAULTED);
-        return APP_RESPONSE_ESTOP;
+        return app_tasks_handle_estop(context);
 
     case COMMAND_TYPE_CLEAR_FAULT:
-        fault_manager_clear();
-        motion_controller_clear_fault();
-        rtos_event_group_clear_bits(
-            &context->event_group,
-            APP_EVENT_FAULTED | APP_EVENT_MOVING | APP_EVENT_STOP_REQUESTED
-        );
-        return APP_RESPONSE_FAULT_CLEARED;
+        return app_tasks_handle_clear_fault(context);
 
     case COMMAND_TYPE_NONE:
     default:
